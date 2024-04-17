@@ -1,0 +1,9 @@
+{
+    "name": "Misskey Webp Proxy",
+    "dockerComposeFile": [
+        "../compose.yaml"
+    ],
+    "service": "app",
+    "workspaceFolder": "/home/vscode/workspace",
+    "remoteUser": "vscode"
+}

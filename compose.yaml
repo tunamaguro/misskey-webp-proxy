@@ -1,0 +1,10 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - type: bind
+        source: .
+        target: /home/vscode/workspace
+    command: /bin/sh -c "while sleep 1000; do :; done"
