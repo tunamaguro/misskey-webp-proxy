@@ -1,7 +1,9 @@
 pub mod client {
-    use anyhow::Result;
-    use reqwest::Url;
+    use std::io::Cursor;
 
+    use anyhow::{Ok, Result};
+    use image::{AnimationDecoder, DynamicImage, Frames, RgbaImage};
+    use reqwest::{Client, Url};
     #[derive(Debug, Clone, Copy, PartialEq)]
     pub(crate) enum ImageExt {
         PNG,
@@ -10,6 +12,12 @@ pub mod client {
         SVG,
         WEBP,
         UNKNOWN,
+    }
+
+    pub enum DecodeResult<'a> {
+        Image(RgbaImage),
+        Movie(Frames<'a>),
+        TextFmt(String),
     }
 
     /// 与えられたurlの画像拡張子を返す
@@ -27,10 +35,49 @@ pub mod client {
         }
     }
 
-    pub(crate) async fn download_image(url: Url) -> Result<()> {
-        let resp = reqwest::get(url).await?;
+    pub(crate) fn get_client(proxy_url: Option<&str>) -> anyhow::Result<reqwest::Client> {
+        let mut builder = reqwest::Client::builder();
+        if let Some(url) = proxy_url {
+            builder = builder.proxy(reqwest::Proxy::all(url)?);
+        }
+        let client = builder.build()?;
+        Ok(client)
+    }
 
-        return Ok(());
+    pub(crate) async fn download_image(client: Client, url: &Url) -> Result<DecodeResult> {
+        let ext = get_image_ext(url);
+        if ext == ImageExt::UNKNOWN {
+            return Err(anyhow::anyhow!("Not supportted"));
+        }
+        let resp = client.get(url.clone()).send().await?;
+        
+
+        match ext {
+            ImageExt::PNG => {
+                let stream = Cursor::new(resp.bytes().await?);
+                let decoder = image::codecs::png::PngDecoder::new(stream)?;
+                let img = DynamicImage::from_decoder(decoder)?;
+                Ok(DecodeResult::Image(img.to_rgba8()))
+            }
+            ImageExt::JPEG => {
+                let stream = Cursor::new(resp.bytes().await?);
+                let decoder = image::codecs::jpeg::JpegDecoder::new(stream)?;
+                let img = DynamicImage::from_decoder(decoder)?;
+                Ok(DecodeResult::Image(img.to_rgba8()))
+            }
+            ImageExt::GIF => {
+                let stream = Cursor::new(resp.bytes().await?);
+                let decoder = image::codecs::gif::GifDecoder::new(stream)?;
+                let frames = decoder.into_frames();
+                Ok(DecodeResult::Movie(frames))
+            }
+            ImageExt::SVG => {
+                let txt = resp.text().await?;
+                Ok(DecodeResult::TextFmt(txt))
+            }
+            ImageExt::WEBP => todo!(),
+            ImageExt::UNKNOWN => Err(anyhow::anyhow!("Not supported")),
+        }
     }
 }
 
