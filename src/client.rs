@@ -50,7 +50,6 @@ pub mod client {
             return Err(anyhow::anyhow!("Not supportted"));
         }
         let resp = client.get(url.clone()).send().await?;
-        
 
         match ext {
             ImageExt::PNG => {
@@ -75,7 +74,17 @@ pub mod client {
                 let txt = resp.text().await?;
                 Ok(DecodeResult::TextFmt(txt))
             }
-            ImageExt::WEBP => todo!(),
+            ImageExt::WEBP => {
+                let stream = Cursor::new(resp.bytes().await?);
+                let decoder = image::codecs::webp::WebPDecoder::new(stream)?;
+                match decoder.has_animation() {
+                    true => Ok(DecodeResult::Movie(decoder.into_frames())),
+                    false => {
+                        let img = DynamicImage::from_decoder(decoder)?;
+                        Ok(DecodeResult::Image(img.to_rgba8()))
+                    }
+                }
+            }
             ImageExt::UNKNOWN => Err(anyhow::anyhow!("Not supported")),
         }
     }
