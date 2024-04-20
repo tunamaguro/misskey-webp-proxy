@@ -1,99 +1,95 @@
-pub mod client {
-    use std::io::Cursor;
+use std::io::Cursor;
 
-    use anyhow::{Ok, Result};
-    use image::{AnimationDecoder, DynamicImage, Frames, RgbaImage};
-    use reqwest::{Client, Url};
-    #[derive(Debug, Clone, Copy, PartialEq)]
-    pub(crate) enum ImageExt {
-        PNG,
-        JPEG,
-        GIF,
-        SVG,
-        WEBP,
-        UNKNOWN,
+use anyhow::{Ok, Result};
+use image::{AnimationDecoder, DynamicImage, Frames, RgbaImage};
+use reqwest::{Client, Url};
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum ImageExt {
+    PNG,
+    JPEG,
+    GIF,
+    SVG,
+    WEBP,
+    UNKNOWN,
+}
+
+pub enum DecodeResult<'a> {
+    Image(RgbaImage),
+    Movie(Frames<'a>),
+    TextFmt(String),
+}
+
+/// 与えられたurlの画像拡張子を返す
+pub(crate) fn get_image_ext(url: &Url) -> ImageExt {
+    let p = url.path();
+    match p.split(".").last() {
+        Some("png") => ImageExt::PNG,
+        Some("jpg") | Some("jpeg") | Some("jfif") | Some("pjpeg") | Some("pjp") => ImageExt::JPEG,
+        Some("gif") => ImageExt::GIF,
+        Some("svg") => ImageExt::SVG,
+        Some("webp") => ImageExt::WEBP,
+        _ => ImageExt::UNKNOWN,
     }
+}
 
-    pub enum DecodeResult<'a> {
-        Image(RgbaImage),
-        Movie(Frames<'a>),
-        TextFmt(String),
+pub(crate) fn get_client(proxy_url: Option<&str>) -> anyhow::Result<reqwest::Client> {
+    let mut builder = reqwest::Client::builder();
+    if let Some(url) = proxy_url {
+        builder = builder.proxy(reqwest::Proxy::all(url)?);
     }
+    let client = builder.build()?;
+    Ok(client)
+}
 
-    /// 与えられたurlの画像拡張子を返す
-    pub(crate) fn get_image_ext(url: &Url) -> ImageExt {
-        let p = url.path();
-        match p.split(".").last() {
-            Some("png") => ImageExt::PNG,
-            Some("jpg") | Some("jpeg") | Some("jfif") | Some("pjpeg") | Some("pjp") => {
-                ImageExt::JPEG
-            }
-            Some("gif") => ImageExt::GIF,
-            Some("svg") => ImageExt::SVG,
-            Some("webp") => ImageExt::WEBP,
-            _ => ImageExt::UNKNOWN,
+pub(crate) async fn download_image(client: Client, url: &Url) -> Result<DecodeResult> {
+    let ext = get_image_ext(url);
+    if ext == ImageExt::UNKNOWN {
+        return Err(anyhow::anyhow!("Not supportted"));
+    }
+    let resp = client.get(url.clone()).send().await?;
+
+    match ext {
+        ImageExt::PNG => {
+            let stream = Cursor::new(resp.bytes().await?);
+            let decoder = image::codecs::png::PngDecoder::new(stream)?;
+            let img = DynamicImage::from_decoder(decoder)?;
+            Ok(DecodeResult::Image(img.to_rgba8()))
         }
-    }
-
-    pub(crate) fn get_client(proxy_url: Option<&str>) -> anyhow::Result<reqwest::Client> {
-        let mut builder = reqwest::Client::builder();
-        if let Some(url) = proxy_url {
-            builder = builder.proxy(reqwest::Proxy::all(url)?);
+        ImageExt::JPEG => {
+            let stream = Cursor::new(resp.bytes().await?);
+            let decoder = image::codecs::jpeg::JpegDecoder::new(stream)?;
+            let img = DynamicImage::from_decoder(decoder)?;
+            Ok(DecodeResult::Image(img.to_rgba8()))
         }
-        let client = builder.build()?;
-        Ok(client)
-    }
-
-    pub(crate) async fn download_image(client: Client, url: &Url) -> Result<DecodeResult> {
-        let ext = get_image_ext(url);
-        if ext == ImageExt::UNKNOWN {
-            return Err(anyhow::anyhow!("Not supportted"));
+        ImageExt::GIF => {
+            let stream = Cursor::new(resp.bytes().await?);
+            let decoder = image::codecs::gif::GifDecoder::new(stream)?;
+            let frames = decoder.into_frames();
+            Ok(DecodeResult::Movie(frames))
         }
-        let resp = client.get(url.clone()).send().await?;
-
-        match ext {
-            ImageExt::PNG => {
-                let stream = Cursor::new(resp.bytes().await?);
-                let decoder = image::codecs::png::PngDecoder::new(stream)?;
-                let img = DynamicImage::from_decoder(decoder)?;
-                Ok(DecodeResult::Image(img.to_rgba8()))
-            }
-            ImageExt::JPEG => {
-                let stream = Cursor::new(resp.bytes().await?);
-                let decoder = image::codecs::jpeg::JpegDecoder::new(stream)?;
-                let img = DynamicImage::from_decoder(decoder)?;
-                Ok(DecodeResult::Image(img.to_rgba8()))
-            }
-            ImageExt::GIF => {
-                let stream = Cursor::new(resp.bytes().await?);
-                let decoder = image::codecs::gif::GifDecoder::new(stream)?;
-                let frames = decoder.into_frames();
-                Ok(DecodeResult::Movie(frames))
-            }
-            ImageExt::SVG => {
-                let txt = resp.text().await?;
-                Ok(DecodeResult::TextFmt(txt))
-            }
-            ImageExt::WEBP => {
-                let stream = Cursor::new(resp.bytes().await?);
-                let decoder = image::codecs::webp::WebPDecoder::new(stream)?;
-                match decoder.has_animation() {
-                    true => Ok(DecodeResult::Movie(decoder.into_frames())),
-                    false => {
-                        let img = DynamicImage::from_decoder(decoder)?;
-                        Ok(DecodeResult::Image(img.to_rgba8()))
-                    }
+        ImageExt::SVG => {
+            let txt = resp.text().await?;
+            Ok(DecodeResult::TextFmt(txt))
+        }
+        ImageExt::WEBP => {
+            let stream = Cursor::new(resp.bytes().await?);
+            let decoder = image::codecs::webp::WebPDecoder::new(stream)?;
+            match decoder.has_animation() {
+                true => Ok(DecodeResult::Movie(decoder.into_frames())),
+                false => {
+                    let img = DynamicImage::from_decoder(decoder)?;
+                    Ok(DecodeResult::Image(img.to_rgba8()))
                 }
             }
-            ImageExt::UNKNOWN => Err(anyhow::anyhow!("Not supported")),
         }
+        ImageExt::UNKNOWN => Err(anyhow::anyhow!("Not supported")),
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use super::client::*;
+    use super::*;
     use pretty_assertions::assert_eq;
     use reqwest::Url;
     use rstest::rstest;
