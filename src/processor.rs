@@ -2,6 +2,8 @@ use crate::client::DecodeResult;
 use anyhow::{Context, Result};
 use image::{imageops, Frame, ImageResult};
 
+use crate::webp::{encode_webp_anim, encode_webp_image};
+
 /// 画像の変換処理を実装する
 /// 仕様書: https://github.com/misskey-dev/media-proxy/blob/master/SPECIFICATION.md
 impl<'a> DecodeResult<'a> {
@@ -43,6 +45,14 @@ impl<'a> DecodeResult<'a> {
         const STATIC_WIDTH: u32 = 422;
 
         self.first()?.resize(STATIC_HEIGHT, STATIC_WIDTH)
+    }
+
+    pub(crate) fn to_webp(&self) -> Result<Vec<u8>> {
+        match self {
+            DecodeResult::Image(img) => encode_webp_image(img),
+            DecodeResult::Movie(frames) => encode_webp_anim(frames),
+            DecodeResult::TextFmt(_) => todo!("Not implemented"),
+        }
     }
 
     /// 大きさを変換する
