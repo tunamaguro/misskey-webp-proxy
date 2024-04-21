@@ -1,5 +1,5 @@
 use crate::client::DecodeResult;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use image::{imageops, Frame, ImageResult};
 
 /// 画像の変換処理を実装する
@@ -45,6 +45,7 @@ impl<'a> DecodeResult<'a> {
         todo!("ここに画像サイズを変更して、初期フレームを取り出す処理を書く")
     }
 
+    /// 大きさを変換する
     fn resize(self, h: u32, w: u32) -> Result<DecodeResult<'a>> {
         match self {
             DecodeResult::Image(img) => {
@@ -66,7 +67,25 @@ impl<'a> DecodeResult<'a> {
                     tmp.into_iter(),
                 ))));
             }
-            DecodeResult::TextFmt(_) => todo!("ここにsvgを画像にする処理を書く"),
+            DecodeResult::TextFmt(_) => self.render_svg(h, w),
+        }
+    }
+
+    /// svgを画像に変換する
+    fn render_svg(self, h: u32, w: u32) -> Result<DecodeResult<'a>> {
+        todo!("ここにsvgを画像にする処理を書く")
+    }
+
+    /// 一枚の画像に変換する。もとから単一の画像であれば何もしない
+    fn first(self) -> Result<DecodeResult<'a>> {
+        match self {
+            DecodeResult::Image(_) => Ok(self),
+            DecodeResult::TextFmt(_) => Ok(self),
+            DecodeResult::Movie(mut frames) => {
+                let first = frames.next().context("cannot find first frame")??;
+
+                Ok(DecodeResult::Image(first.into_buffer()))
+            }
         }
     }
 }
