@@ -104,7 +104,6 @@ impl<'a> DecodeResult<'a> {
 mod tests {
     use std::io::Cursor;
 
-    
     use crate::client::*;
 
     use anyhow::Ok;
@@ -118,11 +117,37 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn webp_encode_test(client: reqwest::Client) -> anyhow::Result<()> {
+    async fn webp_image_encode_test(client: reqwest::Client) -> anyhow::Result<()> {
         let url = Url::parse("https://github.com/tunamaguro.png")?;
         let res = download_image(client, &url).await?;
         let webp = res.to_webp()?;
         let mut file = tokio::fs::File::create("./tests/out/avater.webp").await?;
+
+        let mut contents = Cursor::new(webp);
+        tokio::io::copy(&mut contents, &mut file).await?;
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+
+    async fn webp_anim_encode_test(client: reqwest::Client) -> anyhow::Result<()> {
+        // This gif image was created by Swfung8(https://commons.wikimedia.org/w/index.php?title=User:Swfung8&action=edit&redlink=1),CC BY 4.0
+        let url = Url::parse(
+            "https://upload.wikimedia.org/wikipedia/commons/9/9c/Insertion-sort-example.gif",
+        )?;
+        let res = download_image(client, &url).await?;
+        match res {
+            DecodeResult::Image(_) => todo!(),
+            DecodeResult::Movie(_) => {
+                println!("This is Movie")
+            }
+            DecodeResult::TextFmt(_) => todo!(),
+        };
+
+        let webp = res.to_webp()?;
+        let mut file = tokio::fs::File::create("./tests/out/anim.webp").await?;
 
         let mut contents = Cursor::new(webp);
         tokio::io::copy(&mut contents, &mut file).await?;

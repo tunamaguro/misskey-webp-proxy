@@ -1,11 +1,11 @@
 use anyhow::{Context, Ok, Result};
 use image::{Frames, RgbaImage};
 use libwebp_sys::{
-    WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete,
-    WebPAnimEncoderNewInternal, WebPAnimEncoderOptions, WebPAnimEncoderOptionsInitInternal,
-    WebPConfig, WebPData, WebPDataClear, WebPEncode, WebPGetMuxABIVersion,
-    WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture,
-    WebPPictureFree, WebPPictureImportRGBA, WebPPreset, WebPValidateConfig,
+    WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete, WebPAnimEncoderNewInternal,
+    WebPAnimEncoderOptions, WebPAnimEncoderOptionsInitInternal, WebPConfig, WebPData,
+    WebPDataClear, WebPEncode, WebPGetMuxABIVersion, WebPMemoryWrite, WebPMemoryWriter,
+    WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture, WebPPictureFree,
+    WebPPictureImportRGBA, WebPPreset, WebPValidateConfig,
 };
 
 struct ManagedWebpMemoryWriter {
@@ -121,14 +121,23 @@ pub(crate) fn encode_webp_anim(frames: Frames) -> Result<Vec<u8>> {
             )));
         }
     }
-    unsafe {
+    let status = unsafe {
         WebPAnimEncoderAdd(
             encoder,
             core::ptr::null_mut(),
             time_stamp_ms as i32,
             std::ptr::null(),
-        );
+        )
     };
+    if status == 0 {
+        unsafe {
+            WebPAnimEncoderDelete(encoder);
+        };
+        return Err(anyhow::anyhow!(format!(
+            "Webp Anim encode faild: {}",
+            status
+        )));
+    }
 
     let mut webp_data = std::mem::MaybeUninit::<WebPData>::uninit();
     let status = unsafe { WebPAnimEncoderAssemble(encoder, webp_data.as_mut_ptr()) };
