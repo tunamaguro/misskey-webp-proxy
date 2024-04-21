@@ -47,7 +47,7 @@ impl<'a> DecodeResult<'a> {
         self.first()?.resize(STATIC_HEIGHT, STATIC_WIDTH)
     }
 
-    pub(crate) fn to_webp(&self) -> Result<Vec<u8>> {
+    pub(crate) fn to_webp(self) -> Result<Vec<u8>> {
         match self {
             DecodeResult::Image(img) => encode_webp_image(img),
             DecodeResult::Movie(frames) => encode_webp_anim(frames),
