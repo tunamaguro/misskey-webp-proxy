@@ -53,7 +53,7 @@ impl ManagedWebpPicture {
         let status = unsafe { WebPEncode(&self.config, &mut self.picture) };
         let wrt = unsafe { wrt.assume_init() };
 
-        let mem_writer = ManagedWebpMemoryWriter { wrt: wrt };
+        let mem_writer = ManagedWebpMemoryWriter { wrt };
 
         if status == VP8StatusCode::VP8_STATUS_OK as i32 {
             Ok(mem_writer)
