@@ -118,40 +118,4 @@ mod tests {
         let url = Url::parse(&url).unwrap();
         assert_eq!(get_image_ext(&url), expected);
     }
-
-    #[test]
-    fn tmp() -> anyhow::Result<()> {
-        use std::time::Duration;
-
-        let width = 32u32;
-        let height = 32u32;
-
-        fn dumy_image(width: u32, height: u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-            let mut imgbuf: ImageBuffer<image::Rgba<u8>, Vec<u8>> = ImageBuffer::new(width, height);
-            for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-                let r = (0.3 * x as f32) as u8;
-                let b = (0.3 * y as f32) as u8;
-                *pixel = image::Rgba([r, 0, b, 0]);
-            }
-            imgbuf
-        }
-
-        let mut frames: Vec<Frame> = vec![];
-        for _ in 0..100 {
-            let duration = Duration::from_millis(20);
-            let delay = Delay::from_saturating_duration(duration);
-            frames.push(Frame::from_parts(dumy_image(width, height), 0, 0, delay))
-        }
-
-        let frames = Frames::new(Box::new(frames.into_iter().map(ImageResult::Ok)));
-        let frames = frames.collect_frames()?;
-
-        for f in frames {
-            let d = f.delay().numer_denom_ms();
-            println!("{:?}", d)
-        }
-
-        assert!(false);
-        Ok(())
-    }
 }

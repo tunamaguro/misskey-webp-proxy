@@ -99,3 +99,33 @@ impl<'a> DecodeResult<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+    use crate::client::*;
+
+    use anyhow::Ok;
+    use reqwest::Url;
+    use rstest::*;
+
+    #[fixture]
+    fn client() -> reqwest::Client {
+        get_client(None).unwrap()
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn webp_encode_test(client: reqwest::Client) -> anyhow::Result<()> {
+        let url = Url::parse("https://github.com/tunamaguro.png")?;
+        let res = client.get(url).send().await?;
+        let mut file = tokio::fs::File::create("./avater.png").await?;
+
+        let contents = res.bytes().await?;
+        tokio::io::copy(&mut Cursor::new(contents), &mut file).await?;
+
+        Ok(())
+    }
+}
