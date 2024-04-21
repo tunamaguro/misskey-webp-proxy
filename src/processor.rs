@@ -82,7 +82,7 @@ impl<'a> DecodeResult<'a> {
     }
 
     /// svgを画像に変換する
-    fn render_svg(self, h: u32, w: u32) -> Result<DecodeResult<'a>> {
+    fn render_svg(self, _h: u32, _w: u32) -> Result<DecodeResult<'a>> {
         todo!("ここにsvgを画像にする処理を書く")
     }
 
@@ -104,7 +104,7 @@ impl<'a> DecodeResult<'a> {
 mod tests {
     use std::io::Cursor;
 
-    use super::*;
+    
     use crate::client::*;
 
     use anyhow::Ok;
@@ -120,11 +120,12 @@ mod tests {
     #[tokio::test]
     async fn webp_encode_test(client: reqwest::Client) -> anyhow::Result<()> {
         let url = Url::parse("https://github.com/tunamaguro.png")?;
-        let res = client.get(url).send().await?;
-        let mut file = tokio::fs::File::create("./avater.png").await?;
+        let res = download_image(client, &url).await?;
+        let webp = res.to_webp()?;
+        let mut file = tokio::fs::File::create("./tests/out/avater.webp").await?;
 
-        let contents = res.bytes().await?;
-        tokio::io::copy(&mut Cursor::new(contents), &mut file).await?;
+        let mut contents = Cursor::new(webp);
+        tokio::io::copy(&mut contents, &mut file).await?;
 
         Ok(())
     }

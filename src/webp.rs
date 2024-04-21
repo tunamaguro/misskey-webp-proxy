@@ -1,11 +1,11 @@
 use anyhow::{Context, Ok, Result};
 use image::{Frames, RgbaImage};
 use libwebp_sys::{
-    VP8StatusCode, WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete,
+    WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete,
     WebPAnimEncoderNewInternal, WebPAnimEncoderOptions, WebPAnimEncoderOptionsInitInternal,
-    WebPConfig, WebPData, WebPDataClear, WebPEncode, WebPGetMuxABIVersion, WebPMemoryWrite,
-    WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture, WebPPictureFree,
-    WebPPictureImportRGBA, WebPPreset,
+    WebPConfig, WebPData, WebPDataClear, WebPEncode, WebPGetMuxABIVersion,
+    WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture,
+    WebPPictureFree, WebPPictureImportRGBA, WebPPreset, WebPValidateConfig,
 };
 
 struct ManagedWebpMemoryWriter {
@@ -33,15 +33,21 @@ impl ManagedWebpPicture {
     fn from_rgba(rgba_img: &RgbaImage, quality_factor: f32) -> Result<Self> {
         let config = WebPConfig::new_with_preset(WebPPreset::WEBP_PRESET_PICTURE, quality_factor)
             .map_err(|_| anyhow::anyhow!("WebPConfig init failed"))?;
+        if unsafe { WebPValidateConfig(&config) } == 0 {
+            return Err(anyhow::anyhow!("WebpConfig Validate error"));
+        }
 
         let mut picture =
             WebPPicture::new().map_err(|_| anyhow::anyhow!("WebPPicture init failed"))?;
         picture.height = rgba_img.height() as i32;
         picture.width = rgba_img.width() as i32;
 
-        unsafe {
-            WebPPictureImportRGBA(&mut picture, rgba_img.as_raw().as_ptr(), picture.width * 4);
+        let status = unsafe {
+            WebPPictureImportRGBA(&mut picture, rgba_img.as_raw().as_ptr(), picture.width * 4)
         };
+        if status == 0 {
+            return Err(anyhow::anyhow!("Webp importRGBA failed"));
+        }
         Ok(Self { config, picture })
     }
 
@@ -49,13 +55,14 @@ impl ManagedWebpPicture {
         let mut wrt = std::mem::MaybeUninit::<WebPMemoryWriter>::uninit();
         unsafe { WebPMemoryWriterInit(wrt.as_mut_ptr()) };
         self.picture.writer = Some(WebPMemoryWrite);
-        self.picture.custom_ptr = wrt.as_mut_ptr() as *mut std::ffi::c_void;
+        self.picture.custom_ptr = wrt.as_mut_ptr() as _;
         let status = unsafe { WebPEncode(&self.config, &mut self.picture) };
         let wrt = unsafe { wrt.assume_init() };
 
         let mem_writer = ManagedWebpMemoryWriter { wrt };
 
-        if status == VP8StatusCode::VP8_STATUS_OK as i32 {
+        // 0の時エラー
+        if status != 0 {
             Ok(mem_writer)
         } else {
             Err(anyhow::anyhow!(format!(
