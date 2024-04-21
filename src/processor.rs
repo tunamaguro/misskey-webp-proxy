@@ -42,7 +42,7 @@ impl<'a> DecodeResult<'a> {
         const STATIC_HEIGHT: u32 = 498;
         const STATIC_WIDTH: u32 = 422;
 
-        todo!("ここに画像サイズを変更して、初期フレームを取り出す処理を書く")
+        self.first()?.resize(STATIC_HEIGHT, STATIC_WIDTH)
     }
 
     /// 大きさを変換する
