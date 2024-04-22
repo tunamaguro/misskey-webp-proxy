@@ -32,8 +32,10 @@ struct ManagedWebpPicture {
 
 impl ManagedWebpPicture {
     fn from_rgba(rgba_img: &RgbaImage, quality_factor: f32) -> Result<Self> {
-        let config = WebPConfig::new_with_preset(WebPPreset::WEBP_PRESET_PICTURE, quality_factor)
-            .map_err(|_| anyhow::anyhow!("WebPConfig init failed"))?;
+        let mut config =
+            WebPConfig::new_with_preset(WebPPreset::WEBP_PRESET_PICTURE, quality_factor)
+                .map_err(|_| anyhow::anyhow!("WebPConfig init failed"))?;
+        config.alpha_compression = 0;
         if unsafe { WebPValidateConfig(&config) } == 0 {
             return Err(anyhow::anyhow!("WebpConfig Validate error"));
         }
@@ -51,6 +53,17 @@ impl ManagedWebpPicture {
             return Err(anyhow::anyhow!("Webp importRGBA failed"));
         }
         Ok(Self { config, picture })
+    }
+
+    fn lossless(mut self) -> Self {
+        self.config.lossless = 1;
+        self.config.alpha_compression = 0;
+        return self;
+    }
+
+    fn near_lossless(mut self, near_lossless: i32) -> Self {
+        self.config.near_lossless = near_lossless;
+        return self;
     }
 
     fn encode(mut self) -> Result<ManagedWebpMemoryWriter> {
@@ -123,24 +136,6 @@ pub(crate) fn encode_webp_anim(frames: Frames) -> Result<Vec<u8>> {
             )));
         }
     }
-    let status = unsafe {
-        WebPAnimEncoderAdd(
-            encoder,
-            core::ptr::null_mut(),
-            time_stamp_ms as i32,
-            std::ptr::null(),
-        )
-    };
-    if status == 0 {
-        unsafe {
-            WebPAnimEncoderDelete(encoder);
-        };
-        return Err(anyhow::anyhow!(format!(
-            "Webp Anim encode faild: {}",
-            status
-        )));
-    }
-
     let mut webp_data = std::mem::MaybeUninit::<WebPData>::uninit();
     let status = unsafe { WebPAnimEncoderAssemble(encoder, webp_data.as_mut_ptr()) };
     // 0だと失敗
