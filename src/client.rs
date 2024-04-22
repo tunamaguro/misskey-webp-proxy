@@ -90,7 +90,7 @@ pub(crate) async fn download_image(client: Client, url: &Url) -> Result<DecodeRe
 mod tests {
 
     use super::*;
-    
+
     use pretty_assertions::assert_eq;
     use reqwest::Url;
     use rstest::rstest;

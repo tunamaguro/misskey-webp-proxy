@@ -4,8 +4,9 @@ use libwebp_sys::{
     WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete, WebPAnimEncoderNewInternal,
     WebPAnimEncoderOptions, WebPAnimEncoderOptionsInitInternal, WebPConfig, WebPData,
     WebPDataClear, WebPEncode, WebPGetMuxABIVersion, WebPMemoryWrite, WebPMemoryWriter,
-    WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture, WebPPictureFree,
-    WebPPictureImportRGBA, WebPPreset, WebPValidateConfig,
+    WebPMemoryWriterClear, WebPMemoryWriterInit, WebPMuxAnimParams, WebPMuxAssemble,
+    WebPMuxCreateInternal, WebPMuxDelete, WebPMuxError, WebPMuxSetAnimationParams, WebPPicture,
+    WebPPictureFree, WebPPictureImportRGBA, WebPPreset, WebPValidateConfig,
 };
 
 struct ManagedWebpMemoryWriter {
@@ -39,6 +40,7 @@ impl ManagedWebpPicture {
 
         let mut picture =
             WebPPicture::new().map_err(|_| anyhow::anyhow!("WebPPicture init failed"))?;
+        picture.use_argb = 1;
         picture.height = rgba_img.height() as i32;
         picture.width = rgba_img.width() as i32;
 
@@ -151,14 +153,29 @@ pub(crate) fn encode_webp_anim(frames: Frames) -> Result<Vec<u8>> {
             status
         )));
     }
-    unsafe {
-        WebPAnimEncoderDelete(encoder);
+    let mux = unsafe { WebPMuxCreateInternal(webp_data.as_ptr(), 1, mux_abi_version) };
+    let mux_error = unsafe {
+        WebPMuxSetAnimationParams(
+            mux,
+            &WebPMuxAnimParams {
+                bgcolor: 0,
+                loop_count: 0,
+            },
+        )
     };
-
+    let mut mux_data = unsafe { webp_data.assume_init() };
+    unsafe { WebPDataClear(&mut mux_data) };
+    let mut webp_data = std::mem::MaybeUninit::<WebPData>::uninit();
+    let mux_error = unsafe { WebPMuxAssemble(mux, webp_data.as_mut_ptr()) };
+    if mux_error != WebPMuxError::WEBP_MUX_OK {
+        return Err(anyhow::anyhow!("mux error"));
+    }
     let mut webp_data = unsafe { webp_data.assume_init() };
     let buf = unsafe { std::slice::from_raw_parts(webp_data.bytes, webp_data.size) };
 
     unsafe {
+        WebPMuxDelete(mux);
+        WebPAnimEncoderDelete(encoder);
         WebPDataClear(&mut webp_data);
     };
     Ok(buf.into())
