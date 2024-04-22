@@ -133,9 +133,8 @@ mod tests {
     #[tokio::test]
 
     async fn webp_anim_encode_test(client: reqwest::Client) -> anyhow::Result<()> {
-        // This gif image was created by Swfung8(https://commons.wikimedia.org/w/index.php?title=User:Swfung8&action=edit&redlink=1),CC BY 4.0
         let url = Url::parse(
-            "https://upload.wikimedia.org/wikipedia/commons/9/9c/Insertion-sort-example.gif",
+            "https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExMG9laDA4MGFvb3FmaG1wZ3BjaGswYTNtM3hoc29jYmozbXl5d3d5MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/BfbUe877N4xsUhpcPc/giphy.gif",
         )?;
         let res = download_image(client, &url).await?;
         match res {
