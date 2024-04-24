@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use anyhow::{Ok, Result};
-use image::{AnimationDecoder, DynamicImage, Frames, RgbaImage};
+use image::{AnimationDecoder, DynamicImage, Frame, Frames, RgbaImage};
 use reqwest::{Client, Url};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ImageExt {
@@ -13,9 +13,9 @@ pub(crate) enum ImageExt {
     UNKNOWN,
 }
 
-pub enum DecodeResult<'a> {
+pub enum DecodeResult {
     Image(RgbaImage),
-    Movie(Frames<'a>),
+    Movie(Vec<Frame>),
     TextFmt(String),
 }
 
@@ -65,7 +65,7 @@ pub(crate) async fn download_image(client: Client, url: &Url) -> Result<DecodeRe
             let stream = Cursor::new(resp.bytes().await?);
             let decoder = image::codecs::gif::GifDecoder::new(stream)?;
             let frames = decoder.into_frames();
-            Ok(DecodeResult::Movie(frames))
+            Ok(DecodeResult::Movie(frames.collect_frames()?))
         }
         ImageExt::SVG => {
             let txt = resp.text().await?;
@@ -75,7 +75,7 @@ pub(crate) async fn download_image(client: Client, url: &Url) -> Result<DecodeRe
             let stream = Cursor::new(resp.bytes().await?);
             let decoder = image::codecs::webp::WebPDecoder::new(stream)?;
             match decoder.has_animation() {
-                true => Ok(DecodeResult::Movie(decoder.into_frames())),
+                true => Ok(DecodeResult::Movie(decoder.into_frames().collect_frames()?)),
                 false => {
                     let img = DynamicImage::from_decoder(decoder)?;
                     Ok(DecodeResult::Image(img.to_rgba8()))

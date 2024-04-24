@@ -1,5 +1,5 @@
 use anyhow::{Context, Ok, Result};
-use image::{Frames, RgbaImage};
+use image::{Frame, RgbaImage};
 use libwebp_sys::{
     WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete, WebPAnimEncoderNewInternal,
     WebPAnimEncoderOptions, WebPAnimEncoderOptionsInitInternal, WebPConfig, WebPData,
@@ -102,8 +102,7 @@ pub(crate) fn encode_webp_image(rgba_img: RgbaImage) -> Result<Vec<u8>> {
 }
 
 /// アニメーションをWebpにエンコードする
-pub(crate) fn encode_webp_anim(frames: Frames) -> Result<Vec<u8>> {
-    let frames = frames.into_iter().collect_frames()?;
+pub(crate) fn encode_webp_anim(frames: Vec<Frame>) -> Result<Vec<u8>> {
     let first_frame = frames.first().context("cannot get first frame")?;
     let mut anim_option = std::mem::MaybeUninit::<WebPAnimEncoderOptions>::uninit();
     let mux_abi_version = WebPGetMuxABIVersion();
