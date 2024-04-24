@@ -10,17 +10,15 @@ impl DecodeResult {
     /// emojiを指定された際の大きさに変換する
     pub(crate) fn emoji(self) -> Result<DecodeResult> {
         const EMOJI_HEIGHT: u32 = 128;
-        const EMOJI_WIDTH: u32 = 128;
 
-        self.resize(EMOJI_HEIGHT, EMOJI_WIDTH)
+        self.resize_by_height(EMOJI_HEIGHT)
     }
 
     /// avaterを指定された際の大きさに変換する
     pub(crate) fn avater(self) -> Result<DecodeResult> {
         const AVATER_HEIGHT: u32 = 320;
-        const AVATER_WIDTH: u32 = 320;
 
-        self.resize(AVATER_HEIGHT, AVATER_WIDTH)
+        self.resize_by_height(AVATER_HEIGHT)
     }
 
     /// previewを指定された際の大きさに変換する
@@ -39,12 +37,11 @@ impl DecodeResult {
         self.resize(BADGE_HEIGHT, BADGE_WIDTH)
     }
 
-    /// アニメーション画像であれば最初のフレームのみにする
+    /// アニメーション画像であれば最初のフレームのみにする。ついでに大きさも変換する
     pub(crate) fn static_(self) -> Result<DecodeResult> {
-        const STATIC_HEIGHT: u32 = 498;
-        const STATIC_WIDTH: u32 = 422;
+        const STATIC_HEIGHT: u32 = 422;
 
-        self.first()?.resize(STATIC_HEIGHT, STATIC_WIDTH)
+        self.first()?.resize_by_height(STATIC_HEIGHT)
     }
 
     pub(crate) fn to_webp(self) -> Result<Vec<u8>> {
@@ -76,6 +73,19 @@ impl DecodeResult {
             }
             DecodeResult::TextFmt(_) => self.render_svg(h, w),
         }
+    }
+
+    /// 仕様書にあるように高さが`height`以下になるように変換を行う。その際アスペクト比は維持される
+    /// ## Note
+    /// もともとの画像もしくは動画の高さが`height`以下の場合何も行わない
+    fn resize_by_height(self, height: u32) -> Result<Self> {
+        let current_height = self.height()?;
+        if current_height <= height {
+            return Ok(self);
+        }
+
+        let width = self.width()? * height / current_height;
+        self.resize(height, width)
     }
 
     /// svgを画像に変換する
