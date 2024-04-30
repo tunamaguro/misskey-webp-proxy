@@ -1,12 +1,10 @@
 name: Build 
 
-permissions:
-  contents: write
+# permissions:
+#   contents: write
 
 on:
   push:
-    tags:
-      - "v*.*.*"
 
 jobs:
   build:
@@ -25,8 +23,8 @@ jobs:
 
       - name: Release build
         run: cargo build --release --verbose
-      - name: Upload Assets
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            target/release/misskey-webp-proxy
+      # - name: Upload Assets
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     files: |
+      #       target/release/misskey-webp-proxy
