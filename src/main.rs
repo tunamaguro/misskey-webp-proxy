@@ -1,3 +1,4 @@
+mod args;
 mod client;
 mod handler;
 mod processor;
@@ -5,12 +6,14 @@ mod webp;
 
 use std::sync::Arc;
 
+use args::Args;
 use axum::{
     extract,
     http::{header, StatusCode},
     response::{IntoResponse, Response},
     routing, Router,
 };
+use clap::Parser;
 use client::get_client;
 use handler::{media_proxy, ProxyConfig, ProxyQuery};
 use reqwest::Client;
@@ -33,7 +36,8 @@ async fn proxy_handler(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let client = Arc::new(get_client(None)?);
+    let args = Args::parse();
+    let client = Arc::new(get_client(args.http_proxy.as_deref())?);
 
     let app = Router::new()
         .route("/", routing::get(|| async { "Hello world" }))
