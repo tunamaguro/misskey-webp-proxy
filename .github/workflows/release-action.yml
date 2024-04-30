@@ -1,0 +1,33 @@
+name: Build 
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Restore Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Release build
+        run: cargo build --release --verbose
+      - name: Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/misskey-webp-proxy
