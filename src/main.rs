@@ -6,7 +6,7 @@ mod webp;
 use std::sync::Arc;
 
 use axum::{
-    extract::{Query, State},
+    extract,
     http::{header, StatusCode},
     response::{IntoResponse, Response},
     routing, Router,
@@ -16,8 +16,9 @@ use handler::{media_proxy, ProxyConfig, ProxyQuery};
 use reqwest::Client;
 
 async fn proxy_handler(
-    State(client): State<Arc<Client>>,
-    Query(query): Query<ProxyQuery>,
+    extract::Path(_image_param): extract::Path<String>,
+    extract::State(client): extract::State<Arc<Client>>,
+    extract::Query(query): extract::Query<ProxyQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let config: ProxyConfig = query.try_into()?;
 
@@ -36,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/", routing::get(|| async { "Hello world" }))
-        .route("/proxy", routing::get(proxy_handler))
+        .route("/proxy/:image_param", routing::get(proxy_handler))
         .with_state(client);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
