@@ -153,7 +153,7 @@ mod tests {
     #[tokio::test]
     async fn webp_image_encode_test(client: reqwest::Client) -> anyhow::Result<()> {
         let url = Url::parse("https://github.com/tunamaguro.png")?;
-        let res = download_image(client, &url).await?;
+        let res = download_image(&client, &url).await?;
         let webp = res.to_webp()?;
         let mut file = tokio::fs::File::create("./tests/out/avater.webp").await?;
 
@@ -170,7 +170,7 @@ mod tests {
         let url = Url::parse(
             "https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExMG9laDA4MGFvb3FmaG1wZ3BjaGswYTNtM3hoc29jYmozbXl5d3d5MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/BfbUe877N4xsUhpcPc/giphy.gif",
         )?;
-        let res = download_image(client, &url).await?;
+        let res = download_image(&client, &url).await?;
         match res {
             DecodeResult::Image(_) => todo!(),
             DecodeResult::Movie(_) => {

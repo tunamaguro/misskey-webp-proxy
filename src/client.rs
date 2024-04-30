@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use anyhow::{Ok, Result};
-use image::{AnimationDecoder, DynamicImage, Frame, Frames, RgbaImage};
+use image::{AnimationDecoder, DynamicImage, Frame, RgbaImage};
 use reqwest::{Client, Url};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ImageExt {
@@ -20,6 +20,7 @@ pub enum DecodeResult {
 }
 
 /// 与えられたurlの画像拡張子を返す
+/// https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types
 pub(crate) fn get_image_ext(url: &Url) -> ImageExt {
     let p = url.path();
     match p.split('.').last() {
@@ -41,7 +42,7 @@ pub(crate) fn get_client(proxy_url: Option<&str>) -> anyhow::Result<reqwest::Cli
     Ok(client)
 }
 
-pub(crate) async fn download_image(client: Client, url: &Url) -> Result<DecodeResult> {
+pub(crate) async fn download_image(client: &Client, url: &Url) -> Result<DecodeResult> {
     let ext = get_image_ext(url);
     if ext == ImageExt::UNKNOWN {
         return Err(anyhow::anyhow!("Not supportted"));
