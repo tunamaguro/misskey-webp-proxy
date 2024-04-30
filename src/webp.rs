@@ -58,12 +58,12 @@ impl ManagedWebpPicture {
     fn lossless(mut self) -> Self {
         self.config.lossless = 1;
         self.config.alpha_compression = 0;
-        return self;
+        self
     }
 
     fn near_lossless(mut self, near_lossless: i32) -> Self {
         self.config.near_lossless = near_lossless;
-        return self;
+        self
     }
 
     fn encode(mut self) -> Result<ManagedWebpMemoryWriter> {
@@ -148,7 +148,7 @@ pub(crate) fn encode_webp_anim(frames: Vec<Frame>) -> Result<Vec<u8>> {
         )));
     }
     let mux = unsafe { WebPMuxCreateInternal(webp_data.as_ptr(), 1, mux_abi_version) };
-    let mux_error = unsafe {
+    let _mux_error = unsafe {
         WebPMuxSetAnimationParams(
             mux,
             &WebPMuxAnimParams {

@@ -1,8 +1,13 @@
-use crate::client::DecodeResult;
 use anyhow::{Context, Ok, Result};
-use image::{imageops, Frame};
+use image::{imageops, Frame, RgbaImage};
 
 use crate::webp::{encode_webp_anim, encode_webp_image};
+
+pub(crate) enum DecodeResult {
+    Image(RgbaImage),
+    Movie(Vec<Frame>),
+    TextFmt(String),
+}
 
 /// 画像の変換処理を実装する
 /// 仕様書: https://github.com/misskey-dev/media-proxy/blob/master/SPECIFICATION.md
@@ -15,7 +20,7 @@ impl DecodeResult {
     }
 
     /// avaterを指定された際の大きさに変換する
-    pub(crate) fn avater(self) -> Result<DecodeResult> {
+    pub(crate) fn avatar(self) -> Result<DecodeResult> {
         const AVATER_HEIGHT: u32 = 320;
 
         self.resize_by_height(AVATER_HEIGHT)
@@ -57,7 +62,7 @@ impl DecodeResult {
         match self {
             DecodeResult::Image(img) => {
                 let resized = imageops::resize(&img, w, h, imageops::FilterType::Triangle);
-                return Ok(DecodeResult::Image(resized));
+                Ok(DecodeResult::Image(resized))
             }
             DecodeResult::Movie(frames) => {
                 let mut tmp = Vec::new();
@@ -69,7 +74,7 @@ impl DecodeResult {
                     tmp.push(new_frame);
                 }
 
-                return Ok(DecodeResult::Movie(tmp));
+                Ok(DecodeResult::Movie(tmp))
             }
             DecodeResult::TextFmt(_) => self.render_svg(h, w),
         }
@@ -138,7 +143,7 @@ impl DecodeResult {
 mod tests {
     use std::io::Cursor;
 
-    use crate::client::*;
+    use crate::{client::*, processor::DecodeResult};
 
     use anyhow::Ok;
     use reqwest::Url;
