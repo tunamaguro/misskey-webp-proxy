@@ -29,6 +29,63 @@ pub(crate) fn get_image_ext(url: &Url) -> ImageExt {
     }
 }
 
+pub(crate) fn guess_format(buf: &[u8]) -> ImageExt {
+    // 画像っぽいフォーマットの時の処理
+    if let Ok(format) = image::guess_format(buf) {
+        match format {
+            image::ImageFormat::Png => {
+                return ImageExt::Png;
+            }
+            image::ImageFormat::Jpeg => {
+                return ImageExt::Jpeg;
+            }
+            image::ImageFormat::Gif => {
+                return ImageExt::Gif;
+            }
+            image::ImageFormat::WebP => {
+                return ImageExt::Webp;
+            }
+            image::ImageFormat::Pnm => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Tiff => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Tga => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Dds => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Bmp => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Ico => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Hdr => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::OpenExr => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Farbfeld => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Avif => {
+                return ImageExt::Unknown;
+            }
+            image::ImageFormat::Qoi => {
+                return ImageExt::Unknown;
+            }
+            _ => {}
+        };
+    }
+
+    // それ以外の時はsvgとして処理を試みる
+    ImageExt::Svg
+}
+
 pub(crate) fn get_client(proxy_url: Option<&str>) -> anyhow::Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder();
     if let Some(url) = proxy_url {
@@ -55,38 +112,41 @@ pub(crate) async fn download_image(client: &Client, url: &Url) -> Result<DecodeR
     if is_private_like(url) {
         return Err(anyhow::anyhow!("Cannot accept ipaddr"));
     }
-    let ext = get_image_ext(url);
-    if ext == ImageExt::Unknown {
-        return Err(anyhow::anyhow!("Not supportted"));
-    }
+
     let resp = client.get(url.clone()).send().await?;
+    let buf = resp.bytes().await?;
+    let mut ext = get_image_ext(url);
+    if ext == ImageExt::Unknown {
+        ext = guess_format(&buf);
+    }
 
     match ext {
         ImageExt::Png => {
-            let stream = Cursor::new(resp.bytes().await?);
+            let stream = Cursor::new(buf);
             let decoder = image::codecs::png::PngDecoder::new(stream)?;
             let img = DynamicImage::from_decoder(decoder)?;
             Ok(DecodeResult::Image(img.to_rgba8()))
         }
         ImageExt::Jpeg => {
-            let stream = Cursor::new(resp.bytes().await?);
+            let stream = Cursor::new(buf);
             let decoder = image::codecs::jpeg::JpegDecoder::new(stream)?;
             let img = DynamicImage::from_decoder(decoder)?;
             Ok(DecodeResult::Image(img.to_rgba8()))
         }
         ImageExt::Gif => {
-            let stream = Cursor::new(resp.bytes().await?);
+            let stream = Cursor::new(buf);
             let decoder = image::codecs::gif::GifDecoder::new(stream)?;
             let frames = decoder.into_frames();
             Ok(DecodeResult::Movie(frames.collect_frames()?))
         }
         ImageExt::Svg => {
-            let txt = resp.text().await?;
+            let txt = String::from_utf8_lossy(&buf).to_string();
             Ok(DecodeResult::TextFmt(txt))
         }
         ImageExt::Webp => {
-            let stream = Cursor::new(resp.bytes().await?);
+            let stream = Cursor::new(buf);
             let decoder = image::codecs::webp::WebPDecoder::new(stream)?;
+
             match decoder.has_animation() {
                 true => Ok(DecodeResult::Movie(decoder.into_frames().collect_frames()?)),
                 false => {
