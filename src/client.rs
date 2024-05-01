@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::{io::Cursor, net::IpAddr, str::FromStr};
 
 use crate::processor::DecodeResult;
 use anyhow::Result;
@@ -38,7 +38,23 @@ pub(crate) fn get_client(proxy_url: Option<&str>) -> anyhow::Result<reqwest::Cli
     Ok(client)
 }
 
+/// ホストにIPアドレスを指定されているかチェックする  
+/// TODO: グローバルに到達可能か検証する処理を追加する
+fn is_private_like(url: &Url) -> bool {
+    if let Some(host) = url.host() {
+        return match host {
+            url::Host::Domain(s) => IpAddr::from_str(s).is_ok(),
+            url::Host::Ipv4(_) => true,
+            url::Host::Ipv6(_) => true,
+        };
+    }
+    true
+}
+
 pub(crate) async fn download_image(client: &Client, url: &Url) -> Result<DecodeResult> {
+    if is_private_like(url) {
+        return Err(anyhow::anyhow!("Cannot accept ipaddr"));
+    }
     let ext = get_image_ext(url);
     if ext == ImageExt::Unknown {
         return Err(anyhow::anyhow!("Not supportted"));
