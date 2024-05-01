@@ -43,7 +43,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/", routing::get(|| async { "Hello world" }))
         .route("/proxy/:image_param", routing::get(proxy_handler))
         .with_state(client);
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.host, args.port))
+        .await
+        .unwrap();
     axum::serve(listener, app).await.unwrap();
 
     Ok(())
