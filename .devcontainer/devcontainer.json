@@ -5,5 +5,17 @@
     ],
     "service": "app",
     "workspaceFolder": "/home/vscode/workspace",
-    "remoteUser": "vscode"
+    "remoteUser": "vscode",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "vadimcn.vscode-lldb",
+                "serayuzgur.crates",
+                "tamasfe.even-better-toml",
+                "mhutchie.git-graph",
+                "GitHub.vscode-pull-request-github",
+            ]
+        }
+    }
 }
