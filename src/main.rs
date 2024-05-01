@@ -40,30 +40,24 @@ async fn proxy_handler(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "debug".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().json())
         .init();
-    let args = Args::parse();
     let shared_state = Arc::new((
         get_client(args.http_proxy.as_deref())?,
         args.quality_factor as f32,
     ));
 
-    let allow_origin: Vec<_> = args
-        .allow_origin
-        .iter()
-        .map(|s| s.parse::<http::HeaderValue>().unwrap())
-        .collect();
     let mut cors_layer = tower_http::cors::CorsLayer::new().allow_methods([http::Method::GET]);
-    println!("{:?}", allow_origin);
-    if allow_origin.is_empty() {
+    if args.allow_origin.is_empty() {
         cors_layer = cors_layer.allow_origin(tower_http::cors::Any)
     } else {
-        cors_layer = cors_layer.allow_origin(allow_origin)
+        cors_layer = cors_layer.allow_origin(args.allow_origin)
     }
 
     let app = Router::new()

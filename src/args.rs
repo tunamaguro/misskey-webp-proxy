@@ -1,5 +1,4 @@
 use clap::Parser;
-use http::HeaderValue;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -7,6 +6,7 @@ use http::HeaderValue;
     about,
     long_about = "Misskey Media Proxyの実装です。現在開発段階のため、趣味以外で使うことはお勧めしません"
 )]
+
 pub(crate) struct Args {
     #[arg(
         long,
@@ -38,5 +38,5 @@ pub(crate) struct Args {
         long,
         help = "CORSの設定です。未設定の場合、すべてのオリジンからのリクエストを受け付けます"
     )]
-    pub(crate) allow_origin: Vec<String>,
+    pub(crate) allow_origin: Vec<http::HeaderValue>,
 }
