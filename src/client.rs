@@ -38,7 +38,8 @@ pub(crate) fn get_client(proxy_url: Option<&str>) -> anyhow::Result<reqwest::Cli
     Ok(client)
 }
 
-/// ホストにIPアドレスを指定されているかチェックする
+/// ホストにIPアドレスを指定されているかチェックする  
+/// TODO: グローバルに到達可能か検証する処理を追加する
 fn is_private_like(url: &Url) -> bool {
     if let Some(host) = url.host() {
         return match host {
