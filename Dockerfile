@@ -21,6 +21,14 @@ RUN rm src/*.rs
 COPY ./src ./src
 RUN cargo build --release
 
-FROM gcr.io/distroless/cc-debian12
-COPY --from=builder /app/target/release/misskey-webp-proxy /
-CMD ["./misskey-webp-proxy"]
+FROM debian:12-slim as tini
+ENV TINI_VERSION v0.19.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+
+FROM gcr.io/distroless/cc-debian12:nonroot as runner
+COPY --from=tini --chown=nonroot:nonroot /tini /
+ENTRYPOINT [ "/tini", "--" ]
+
+COPY --from=builder --chown=nonroot:nonroot /app/target/release/misskey-webp-proxy /
+CMD ["/misskey-webp-proxy"]
