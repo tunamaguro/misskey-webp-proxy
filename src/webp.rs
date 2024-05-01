@@ -95,14 +95,14 @@ impl Drop for ManagedWebpPicture {
 }
 
 /// アニメーションを含まない画像をWebpにエンコードする
-pub(crate) fn encode_webp_image(rgba_img: RgbaImage) -> Result<Vec<u8>> {
-    let wrt = ManagedWebpPicture::from_rgba(&rgba_img, 75.0)?.encode()?;
+pub(crate) fn encode_webp_image(rgba_img: RgbaImage, quality_factor: f32) -> Result<Vec<u8>> {
+    let wrt = ManagedWebpPicture::from_rgba(&rgba_img, quality_factor)?.encode()?;
     let buf = wrt.get();
     Ok(buf.into())
 }
 
 /// アニメーションをWebpにエンコードする
-pub(crate) fn encode_webp_anim(frames: Vec<Frame>) -> Result<Vec<u8>> {
+pub(crate) fn encode_webp_anim(frames: Vec<Frame>, quality_factor: f32) -> Result<Vec<u8>> {
     let first_frame = frames.first().context("cannot get first frame")?;
     let mut anim_option = std::mem::MaybeUninit::<WebPAnimEncoderOptions>::uninit();
     let mux_abi_version = WebPGetMuxABIVersion();
@@ -120,7 +120,7 @@ pub(crate) fn encode_webp_anim(frames: Vec<Frame>) -> Result<Vec<u8>> {
     for f in frames {
         let duration = f.delay().numer_denom_ms();
         time_stamp_ms += duration.0 / duration.1;
-        let mut pic = ManagedWebpPicture::from_rgba(f.buffer(), 75_f32)?;
+        let mut pic = ManagedWebpPicture::from_rgba(f.buffer(), quality_factor)?;
         let status = unsafe {
             WebPAnimEncoderAdd(encoder, &mut pic.picture, time_stamp_ms as i32, &pic.config)
         };
