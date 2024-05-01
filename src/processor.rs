@@ -94,8 +94,31 @@ impl DecodeResult {
     }
 
     /// svgを画像に変換する
-    fn render_svg(self, _h: u32, _w: u32) -> Result<DecodeResult> {
-        todo!("ここにsvgを画像にする処理を書く")
+    fn render_svg(self, h: u32, w: u32) -> Result<DecodeResult> {
+        let res = match self {
+            DecodeResult::Image(_) => self,
+            DecodeResult::Movie(_) => self,
+            DecodeResult::TextFmt(txt) => {
+                let mut opt = usvg::Options::default();
+                // opt.default_size = usvg::Size::from_wh(w as f32, h as f32).context("")?;
+                let mut fontdb = usvg::fontdb::Database::new();
+                fontdb.load_system_fonts();
+
+                let tree = usvg::Tree::from_str(&txt, &opt, &fontdb)?;
+
+                let pixmap_size: resvg::tiny_skia::IntSize = tree.size().to_int_size();
+                let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height())
+                    .context("init pixmap fail")?;
+                resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+
+                let img =
+                    RgbaImage::from_raw(pixmap.width(), pixmap.height(), pixmap.data().to_vec())
+                        .context("render svg error")?;
+
+                DecodeResult::Image(img)
+            }
+        };
+        Ok(res)
     }
 
     /// 一枚の画像に変換する。もとから単一の画像であれば何もしない
