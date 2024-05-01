@@ -53,7 +53,7 @@ impl DecodeResult {
         match self {
             DecodeResult::Image(img) => encode_webp_image(img, quality_factor),
             DecodeResult::Movie(frames) => encode_webp_anim(frames, quality_factor),
-            DecodeResult::TextFmt(_) => todo!("Not implemented"),
+            DecodeResult::TextFmt(_) => self.render_svg()?.to_webp(quality_factor),
         }
     }
 
@@ -76,7 +76,7 @@ impl DecodeResult {
 
                 Ok(DecodeResult::Movie(tmp))
             }
-            DecodeResult::TextFmt(_) => self.render_svg(h, w),
+            DecodeResult::TextFmt(_) => self.render_svg()?.resize(h, w),
         }
     }
 
@@ -94,8 +94,31 @@ impl DecodeResult {
     }
 
     /// svgを画像に変換する
-    fn render_svg(self, _h: u32, _w: u32) -> Result<DecodeResult> {
-        todo!("ここにsvgを画像にする処理を書く")
+    fn render_svg(self) -> Result<DecodeResult> {
+        let res = match self {
+            DecodeResult::Image(_) => self,
+            DecodeResult::Movie(_) => self,
+            DecodeResult::TextFmt(txt) => {
+                let mut opt = usvg::Options::default();
+                // opt.default_size = usvg::Size::from_wh(w as f32, h as f32).context("")?;
+                let mut fontdb = usvg::fontdb::Database::new();
+                fontdb.load_system_fonts();
+
+                let tree = usvg::Tree::from_str(&txt, &opt, &fontdb)?;
+
+                let pixmap_size: resvg::tiny_skia::IntSize = tree.size().to_int_size();
+                let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height())
+                    .context("init pixmap fail")?;
+                resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+
+                let img =
+                    RgbaImage::from_raw(pixmap.width(), pixmap.height(), pixmap.data().to_vec())
+                        .context("render svg error")?;
+
+                DecodeResult::Image(img)
+            }
+        };
+        Ok(res)
     }
 
     /// 一枚の画像に変換する。もとから単一の画像であれば何もしない
@@ -122,7 +145,9 @@ impl DecodeResult {
                 let first = frames.first().context("cannot find first frame")?;
                 Ok(first.buffer().height())
             }
-            DecodeResult::TextFmt(_) => todo!(),
+            DecodeResult::TextFmt(txt) => {
+                Ok(Self::create_svg_tree(txt)?.size().to_int_size().height())
+            }
         }
     }
 
@@ -134,8 +159,20 @@ impl DecodeResult {
                 let first = frames.first().context("cannot find first frame")?;
                 Ok(first.buffer().width())
             }
-            DecodeResult::TextFmt(_) => todo!(),
+            DecodeResult::TextFmt(txt) => {
+                Ok(Self::create_svg_tree(txt)?.size().to_int_size().width())
+            }
         }
+    }
+
+    fn create_svg_tree(txt: &String) -> Result<usvg::Tree> {
+        let mut opt = usvg::Options::default();
+        // opt.default_size = usvg::Size::from_wh(w as f32, h as f32).context("")?;
+        let mut fontdb = usvg::fontdb::Database::new();
+        fontdb.load_system_fonts();
+
+        let tree = usvg::Tree::from_str(&txt, &opt, &fontdb)?;
+        Ok(tree)
     }
 }
 
@@ -159,7 +196,7 @@ mod tests {
     async fn webp_image_encode_test(client: reqwest::Client) -> anyhow::Result<()> {
         let url = Url::parse("https://github.com/tunamaguro.png")?;
         let res = download_image(&client, &url).await?;
-        let webp = res.to_webp()?;
+        let webp = res.to_webp(75.0)?;
         let mut file = tokio::fs::File::create("./tests/out/avater.webp").await?;
 
         let mut contents = Cursor::new(webp);
@@ -184,7 +221,7 @@ mod tests {
             DecodeResult::TextFmt(_) => todo!(),
         };
 
-        let webp = res.to_webp()?;
+        let webp = res.to_webp(75.0)?;
         let mut file = tokio::fs::File::create("./tests/out/anim.webp").await?;
 
         let mut contents = Cursor::new(webp);
