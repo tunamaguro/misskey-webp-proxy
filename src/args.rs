@@ -36,7 +36,7 @@ pub(crate) struct Args {
     pub(crate) quality_factor: u8,
     #[arg(
         long,
-        help = "CORSの設定です。未設定の場合、すべてのオリジンからのリクエストを受け付けます"
+        help = "CORSの設定です。未設定の場合、すべてのオリジンからのリクエストを受け付けます\nExample: `--allow_origin=https://misskey1.example.com --allow_origin=https://misskey2.example.com`"
     )]
     pub(crate) allow_origin: Vec<http::HeaderValue>,
 }
