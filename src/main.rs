@@ -17,7 +17,9 @@ use clap::Parser;
 use client::get_client;
 use handler::{media_proxy, ProxyConfig, ProxyQuery};
 use reqwest::Client;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
+#[tracing::instrument]
 async fn proxy_handler(
     extract::Path(_image_param): extract::Path<String>,
     extract::State(state): extract::State<Arc<(Client, f32)>>,
@@ -29,7 +31,7 @@ async fn proxy_handler(
 
     let buf = media_proxy(client, &config, quality_factor).await?;
 
-    // `Content-Security-Policy`および`Content-Disposition`は未対応
+    // TODO:`Content-Security-Policy`および`Content-Disposition`に対応する
     Ok((
         [(header::CACHE_CONTROL, "max-age=31536000, immutable")],
         buf,
@@ -38,16 +40,40 @@ async fn proxy_handler(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
     let args = Args::parse();
     let shared_state = Arc::new((
         get_client(args.http_proxy.as_deref())?,
         args.quality_factor as f32,
     ));
 
+    // let allow_origin: Vec<_> = args
+    //     .allow_origin
+    //     .iter()
+    //     .map(|s| s.parse::<http::HeaderValue>().unwrap())
+    //     .collect();
+    // let mut cors_layer = tower_http::cors::CorsLayer::new().allow_methods([http::Method::GET]);
+    // println!("{:?}", allow_origin);
+    // if allow_origin.is_empty() {
+    //     cors_layer = cors_layer.allow_origin(tower_http::cors::Any)
+    // } else {
+    //     cors_layer = cors_layer.allow_origin([
+    //         "http://example.com".parse().unwrap(),
+    //         "http://api.example.com".parse().unwrap(),
+    //     ])
+    // }
+
     let app = Router::new()
         .route("/", routing::get(|| async { "Hello world" }))
         .route("/proxy/:image_param", routing::get(proxy_handler))
-        .with_state(shared_state);
+        .with_state(shared_state)
+        .layer(tower_http::trace::TraceLayer::new_for_http());
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.host, args.port))
         .await
         .unwrap();

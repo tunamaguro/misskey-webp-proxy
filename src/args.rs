@@ -1,4 +1,5 @@
 use clap::Parser;
+use http::HeaderValue;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -33,4 +34,9 @@ pub(crate) struct Args {
         help = "Webpの圧縮率です。0-100の範囲で指定でき、0が最も高い圧縮率ですが画質が低くなります"
     )]
     pub(crate) quality_factor: u8,
+    #[arg(
+        long,
+        help = "CORSの設定です。未設定の場合、すべてのオリジンからのリクエストを受け付けます"
+    )]
+    pub(crate) allow_origin: Vec<String>,
 }
