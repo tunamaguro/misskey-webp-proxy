@@ -76,8 +76,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let app = Router::new()
-        .route("/", routing::get(|| async { "Hello world" }))
-        .route("/proxy/:image_param", routing::get(proxy_handler))
+        .route("/health", routing::get(|| async { "Hello world" }))
+        .route("/", routing::get(proxy_handler))
         .with_state(shared_state)
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(cors_layer);
