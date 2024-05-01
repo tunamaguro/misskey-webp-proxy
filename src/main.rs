@@ -56,6 +56,13 @@ async fn main() -> anyhow::Result<()> {
         )
         .with(tracing_subscriber::fmt::layer().json())
         .init();
+    tracing::info!(
+        host = args.host,
+        port = args.port,
+        "Waiting request at {}:{} ...",
+        args.host,
+        args.port,
+    );
     let shared_state = Arc::new((
         get_client(args.http_proxy.as_deref())?,
         args.quality_factor as f32,
