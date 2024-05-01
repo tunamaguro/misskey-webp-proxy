@@ -77,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", routing::get(|| async { "Hello world" }))
+        .route("/", routing::get(proxy_handler))
         .route("/:image_param", routing::get(proxy_handler))
         .route("/proxy/:image_param", routing::get(proxy_handler))
         .with_state(shared_state)
