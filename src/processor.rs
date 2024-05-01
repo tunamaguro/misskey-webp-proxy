@@ -213,13 +213,6 @@ mod tests {
             "https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExMG9laDA4MGFvb3FmaG1wZ3BjaGswYTNtM3hoc29jYmozbXl5d3d5MiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/BfbUe877N4xsUhpcPc/giphy.gif",
         )?;
         let res = download_image(&client, &url).await?;
-        match res {
-            DecodeResult::Image(_) => todo!(),
-            DecodeResult::Movie(_) => {
-                println!("This is Movie")
-            }
-            DecodeResult::TextFmt(_) => todo!(),
-        };
 
         let webp = res.to_webp(75.0)?;
         let mut file = tokio::fs::File::create("./tests/out/anim.webp").await?;
