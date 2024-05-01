@@ -6,6 +6,7 @@ use clap::Parser;
     about,
     long_about = "Misskey Media Proxyの実装です。現在開発段階のため、趣味以外で使うことはお勧めしません"
 )]
+
 pub(crate) struct Args {
     #[arg(
         long,
@@ -33,4 +34,9 @@ pub(crate) struct Args {
         help = "Webpの圧縮率です。0-100の範囲で指定でき、0が最も高い圧縮率ですが画質が低くなります"
     )]
     pub(crate) quality_factor: u8,
+    #[arg(
+        long,
+        help = "CORSの設定です。未設定の場合、すべてのオリジンからのリクエストを受け付けます"
+    )]
+    pub(crate) allow_origin: Vec<http::HeaderValue>,
 }
