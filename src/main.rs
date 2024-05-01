@@ -31,14 +31,19 @@ async fn proxy_handler(
 
     let buf = media_proxy(client, &config).await?;
 
+    let cache_header = (header::CACHE_CONTROL, "max-age=31536000, immutable");
+
     // TODO:`Content-Security-Policy`および`Content-Disposition`に対応する
-    Ok((
-        [
-            (header::CACHE_CONTROL, "max-age=31536000, immutable"),
-            (header::CONTENT_TYPE, "image/webp"),
-        ],
-        buf.to_webp(quality_factor)?,
-    ))
+    match config.convert_type {
+        handler::ConvertType::Badge => Ok((
+            [cache_header, (header::CONTENT_TYPE, "image/png")],
+            buf.to_png()?,
+        )),
+        _ => Ok((
+            [cache_header, (header::CONTENT_TYPE, "image/webp")],
+            buf.to_webp(quality_factor)?,
+        )),
+    }
 }
 
 #[tokio::main]
