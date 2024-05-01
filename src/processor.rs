@@ -58,7 +58,18 @@ impl DecodeResult {
         }
     }
 
-
+    /// pngにエンコードする
+    pub(crate) fn to_png(self) -> Result<Vec<u8>> {
+        match self {
+            DecodeResult::Image(img) => {
+                let mut buf: Vec<u8> = vec![];
+                img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)?;
+                Ok(buf)
+            }
+            DecodeResult::Movie(_) => self.first()?.to_png(),
+            DecodeResult::TextFmt(_) => self.render_svg()?.to_png(),
+        }
+    }
 
     /// 大きさを変換する
     fn resize(self, h: u32, w: u32) -> Result<DecodeResult> {
