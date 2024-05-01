@@ -49,6 +49,7 @@ impl DecodeResult {
         self.first()?.resize_by_height(STATIC_HEIGHT)
     }
 
+    /// webpにエンコードする
     pub(crate) fn to_webp(self, quality_factor: f32) -> Result<Vec<u8>> {
         match self {
             DecodeResult::Image(img) => encode_webp_image(img, quality_factor),
@@ -56,6 +57,8 @@ impl DecodeResult {
             DecodeResult::TextFmt(_) => self.render_svg()?.to_webp(quality_factor),
         }
     }
+
+
 
     /// 大きさを変換する
     fn resize(self, h: u32, w: u32) -> Result<DecodeResult> {
