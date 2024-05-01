@@ -1,12 +1,12 @@
 use anyhow::{Context, Ok, Result};
 use image::{Frame, RgbaImage};
 use libwebp_sys::{
-    WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete, WebPAnimEncoderNewInternal,
-    WebPAnimEncoderOptions, WebPAnimEncoderOptionsInitInternal, WebPConfig, WebPData,
-    WebPDataClear, WebPEncode, WebPGetMuxABIVersion, WebPMemoryWrite, WebPMemoryWriter,
-    WebPMemoryWriterClear, WebPMemoryWriterInit, WebPMuxAnimParams, WebPMuxAssemble,
-    WebPMuxCreateInternal, WebPMuxDelete, WebPMuxError, WebPMuxSetAnimationParams, WebPPicture,
-    WebPPictureFree, WebPPictureImportRGBA, WebPPreset, WebPValidateConfig,
+    WebPAnimEncoder, WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete,
+    WebPAnimEncoderNewInternal, WebPAnimEncoderOptions, WebPAnimEncoderOptionsInitInternal,
+    WebPConfig, WebPData, WebPDataClear, WebPEncode, WebPGetMuxABIVersion, WebPMemoryWrite,
+    WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPMux, WebPMuxAnimParams,
+    WebPMuxAssemble, WebPMuxCreateInternal, WebPMuxDelete, WebPMuxError, WebPMuxSetAnimationParams,
+    WebPPicture, WebPPictureFree, WebPPictureImportRGBA, WebPPreset, WebPValidateConfig,
 };
 
 struct ManagedWebpMemoryWriter {
@@ -101,76 +101,155 @@ pub(crate) fn encode_webp_image(rgba_img: RgbaImage, quality_factor: f32) -> Res
     Ok(buf.into())
 }
 
-/// アニメーションをWebpにエンコードする
-pub(crate) fn encode_webp_anim(frames: Vec<Frame>, quality_factor: f32) -> Result<Vec<u8>> {
-    let first_frame = frames.first().context("cannot get first frame")?;
-    let mut anim_option = std::mem::MaybeUninit::<WebPAnimEncoderOptions>::uninit();
-    let mux_abi_version = WebPGetMuxABIVersion();
-    unsafe { WebPAnimEncoderOptionsInitInternal(anim_option.as_mut_ptr(), mux_abi_version) };
-    let encoder = unsafe {
-        WebPAnimEncoderNewInternal(
-            first_frame.buffer().width() as i32,
-            first_frame.buffer().height() as i32,
-            anim_option.as_ptr(),
-            mux_abi_version,
-        )
-    };
+struct ManagedWebpData {
+    webp_data: WebPData,
+}
 
-    let mut time_stamp_ms = 0;
-    for f in frames {
-        let duration = f.delay().numer_denom_ms();
-        time_stamp_ms += duration.0 / duration.1;
-        let mut pic = ManagedWebpPicture::from_rgba(f.buffer(), quality_factor)?;
-        let status = unsafe {
-            WebPAnimEncoderAdd(encoder, &mut pic.picture, time_stamp_ms as i32, &pic.config)
+impl ManagedWebpData {
+    fn new(ptr: std::mem::MaybeUninit<WebPData>) -> Self {
+        let webp_data = unsafe { ptr.assume_init() };
+        Self {
+            webp_data: webp_data,
+        }
+    }
+}
+
+impl Drop for ManagedWebpData {
+    fn drop(&mut self) {
+        unsafe {
+            WebPDataClear(&mut self.webp_data);
+        }
+    }
+}
+
+struct ManagedWebpMux {
+    mux: *mut WebPMux,
+}
+
+impl ManagedWebpMux {
+    fn new(webp_data: &WebPData, mux_abi_ver: i32) -> Self {
+        let mux = unsafe { WebPMuxCreateInternal(webp_data, 1, mux_abi_ver) };
+        Self { mux }
+    }
+}
+
+impl Drop for ManagedWebpMux {
+    fn drop(&mut self) {
+        unsafe {
+            WebPMuxDelete(self.mux);
+        }
+    }
+}
+
+struct ManagedWebpAnim {
+    anim_option: WebPAnimEncoderOptions,
+    anim_encoder: *mut WebPAnimEncoder,
+    webp_muxabi_ver: i32,
+    frames: Vec<Frame>,
+}
+
+impl ManagedWebpAnim {
+    fn new(frames: Vec<Frame>) -> Result<Self> {
+        let first_frame = frames.first().context("cannot get first frame")?;
+        let mux_abi_version = WebPGetMuxABIVersion();
+        let mut anim_option = std::mem::MaybeUninit::<WebPAnimEncoderOptions>::uninit();
+        unsafe { WebPAnimEncoderOptionsInitInternal(anim_option.as_mut_ptr(), mux_abi_version) };
+        let anim_option = unsafe { anim_option.assume_init() };
+        let encoder = unsafe {
+            WebPAnimEncoderNewInternal(
+                first_frame.buffer().width() as i32,
+                first_frame.buffer().height() as i32,
+                &anim_option,
+                mux_abi_version,
+            )
         };
-        // 0だと失敗
+
+        return Ok(Self {
+            anim_option,
+            webp_muxabi_ver: mux_abi_version,
+            anim_encoder: encoder,
+            frames,
+        });
+    }
+
+    fn encode(mut self, quality_factor: f32) -> Result<Vec<u8>> {
+        let mut time_stamp_ms = 0;
+        for f in self.frames.iter() {
+            self.anim_encoder_add(f, &mut time_stamp_ms, quality_factor)?;
+        }
+
+        let mut webp_data = std::mem::MaybeUninit::<WebPData>::uninit();
+        let status = unsafe { WebPAnimEncoderAssemble(self.anim_encoder, webp_data.as_mut_ptr()) };
         if status == 0 {
-            unsafe {
-                WebPAnimEncoderDelete(encoder);
-            };
+            return Err(anyhow::anyhow!("Webp Anim Assemble failed: {}", status));
+        }
+        let mut webp_data = ManagedWebpData::new(webp_data);
+
+        // mux
+        let mux = ManagedWebpMux::new(&webp_data.webp_data, self.webp_muxabi_ver);
+        Self::check_mux_error(unsafe {
+            WebPMuxSetAnimationParams(
+                mux.mux,
+                &WebPMuxAnimParams {
+                    bgcolor: 0,
+                    loop_count: 0,
+                },
+            )
+        })?;
+
+        Self::check_mux_error(unsafe { WebPMuxAssemble(mux.mux, &mut webp_data.webp_data) })?;
+        let buf = unsafe {
+            std::slice::from_raw_parts(webp_data.webp_data.bytes, webp_data.webp_data.size)
+        };
+        let buf = buf.to_vec();
+        Ok(buf)
+    }
+
+    fn anim_encoder_add(
+        &self,
+        frame: &Frame,
+        time_stamp: &mut u32,
+        quality_factor: f32,
+    ) -> Result<()> {
+        let duration = frame.delay().numer_denom_ms();
+        *time_stamp += duration.0 / duration.1;
+        let mut pic = ManagedWebpPicture::from_rgba(frame.buffer(), quality_factor)?;
+        let status = unsafe {
+            WebPAnimEncoderAdd(
+                self.anim_encoder,
+                &mut pic.picture,
+                *time_stamp as i32,
+                &pic.config,
+            )
+        };
+        if status == 0 {
             return Err(anyhow::anyhow!(format!(
                 "Webp Anim encode faild: {}",
                 status
             )));
         }
-    }
-    let mut webp_data = std::mem::MaybeUninit::<WebPData>::uninit();
-    let status = unsafe { WebPAnimEncoderAssemble(encoder, webp_data.as_mut_ptr()) };
-    // 0だと失敗
-    if status == 0 {
-        unsafe {
-            WebPAnimEncoderDelete(encoder);
-        };
-        return Err(anyhow::anyhow!(format!(
-            "Webp Anim encode faild: {}",
-            status
-        )));
-    }
-    let mux = unsafe { WebPMuxCreateInternal(webp_data.as_ptr(), 1, mux_abi_version) };
-    let _mux_error = unsafe {
-        WebPMuxSetAnimationParams(
-            mux,
-            &WebPMuxAnimParams {
-                bgcolor: 0,
-                loop_count: 0,
-            },
-        )
-    };
-    let mut mux_data = unsafe { webp_data.assume_init() };
-    unsafe { WebPDataClear(&mut mux_data) };
-    let mut webp_data = std::mem::MaybeUninit::<WebPData>::uninit();
-    let mux_error = unsafe { WebPMuxAssemble(mux, webp_data.as_mut_ptr()) };
-    if mux_error != WebPMuxError::WEBP_MUX_OK {
-        return Err(anyhow::anyhow!("mux error"));
-    }
-    let mut webp_data = unsafe { webp_data.assume_init() };
-    let buf = unsafe { std::slice::from_raw_parts(webp_data.bytes, webp_data.size) };
 
-    unsafe {
-        WebPMuxDelete(mux);
-        WebPAnimEncoderDelete(encoder);
-        WebPDataClear(&mut webp_data);
-    };
-    Ok(buf.into())
+        Ok(())
+    }
+
+    fn check_mux_error(e: WebPMuxError) -> Result<()> {
+        match e {
+            WebPMuxError::WEBP_MUX_OK => Ok(()),
+            _ => Err(anyhow::anyhow!("mux err")),
+        }
+    }
+}
+
+impl Drop for ManagedWebpAnim {
+    fn drop(&mut self) {
+        unsafe {
+            WebPAnimEncoderDelete(self.anim_encoder);
+        }
+    }
+}
+
+/// アニメーションをWebpにエンコードする
+pub(crate) fn encode_webp_anim(frames: Vec<Frame>, quality_factor: f32) -> Result<Vec<u8>> {
+    let encoder = ManagedWebpAnim::new(frames)?;
+    encoder.encode(quality_factor)
 }
