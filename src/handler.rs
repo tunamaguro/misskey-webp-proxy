@@ -25,9 +25,9 @@ pub(crate) enum ConvertType {
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct ProxyConfig {
-    url: Url,
-    convert_type: ConvertType,
-    is_static: bool,
+    pub(crate) url: Url,
+    pub(crate) convert_type: ConvertType,
+    pub(crate) is_static: bool,
 }
 
 impl TryFrom<ProxyQuery> for ProxyConfig {
@@ -60,7 +60,7 @@ impl TryFrom<ProxyQuery> for ProxyConfig {
 
 pub(crate) async fn media_proxy(
     client: &Client,
-    proxy_config: &ProxyConfig
+    proxy_config: &ProxyConfig,
 ) -> Result<DecodeResult> {
     let mut decoded_buf = download_image(client, &proxy_config.url).await?;
     match proxy_config.is_static {
