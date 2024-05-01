@@ -20,12 +20,14 @@ use reqwest::Client;
 
 async fn proxy_handler(
     extract::Path(_image_param): extract::Path<String>,
-    extract::State(client): extract::State<Arc<Client>>,
+    extract::State(state): extract::State<Arc<(Client, f32)>>,
     extract::Query(query): extract::Query<ProxyQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let config: ProxyConfig = query.try_into()?;
+    let client = &state.0;
+    let quality_factor = state.1;
 
-    let buf = media_proxy(&client, &config).await?;
+    let buf = media_proxy(client, &config, quality_factor).await?;
 
     // `Content-Security-Policy`および`Content-Disposition`は未対応
     Ok((
@@ -37,12 +39,15 @@ async fn proxy_handler(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let client = Arc::new(get_client(args.http_proxy.as_deref())?);
+    let shared_state = Arc::new((
+        get_client(args.http_proxy.as_deref())?,
+        args.quality_factor as f32,
+    ));
 
     let app = Router::new()
         .route("/", routing::get(|| async { "Hello world" }))
         .route("/proxy/:image_param", routing::get(proxy_handler))
-        .with_state(client);
+        .with_state(shared_state);
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.host, args.port))
         .await
         .unwrap();

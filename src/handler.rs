@@ -58,16 +58,20 @@ impl TryFrom<ProxyQuery> for ProxyConfig {
     }
 }
 
-pub(crate) async fn media_proxy(client: &Client, config: &ProxyConfig) -> Result<Vec<u8>> {
-    let mut decoded_buf = download_image(client, &config.url).await?;
-    match config.is_static {
+pub(crate) async fn media_proxy(
+    client: &Client,
+    proxy_config: &ProxyConfig,
+    quality_factor: f32,
+) -> Result<Vec<u8>> {
+    let mut decoded_buf = download_image(client, &proxy_config.url).await?;
+    match proxy_config.is_static {
         true => decoded_buf = decoded_buf.static_()?,
         false => {
             // do nothing
         }
     }
 
-    match config.convert_type {
+    match proxy_config.convert_type {
         ConvertType::Emoji => decoded_buf = decoded_buf.emoji()?,
         ConvertType::Avatar => decoded_buf = decoded_buf.avatar()?,
         ConvertType::Preview => decoded_buf = decoded_buf.preview()?,
@@ -77,5 +81,5 @@ pub(crate) async fn media_proxy(client: &Client, config: &ProxyConfig) -> Result
         }
     }
 
-    decoded_buf.to_webp()
+    decoded_buf.to_webp(quality_factor)
 }

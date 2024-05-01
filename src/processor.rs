@@ -49,10 +49,10 @@ impl DecodeResult {
         self.first()?.resize_by_height(STATIC_HEIGHT)
     }
 
-    pub(crate) fn to_webp(self) -> Result<Vec<u8>> {
+    pub(crate) fn to_webp(self, quality_factor: f32) -> Result<Vec<u8>> {
         match self {
-            DecodeResult::Image(img) => encode_webp_image(img),
-            DecodeResult::Movie(frames) => encode_webp_anim(frames),
+            DecodeResult::Image(img) => encode_webp_image(img, quality_factor),
+            DecodeResult::Movie(frames) => encode_webp_anim(frames, quality_factor),
             DecodeResult::TextFmt(_) => todo!("Not implemented"),
         }
     }

@@ -27,4 +27,10 @@ pub(crate) struct Args {
         help = "Media Proxyが待機するアドレスです"
     )]
     pub(crate) host: String,
+    #[arg(
+        long,
+        default_value_t = 75,
+        help = "Webpの圧縮率です。0-100の範囲で指定でき、0が最も高い圧縮率ですが画質が低くなります"
+    )]
+    pub(crate) quality_factor: u8,
 }
