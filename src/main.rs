@@ -21,7 +21,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 #[tracing::instrument]
 async fn proxy_handler(
-    extract::Path(_image_param): extract::Path<String>,
     extract::State(state): extract::State<Arc<(Client, f32)>>,
     extract::Query(query): extract::Query<ProxyQuery>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -44,6 +43,15 @@ async fn proxy_handler(
             buf.to_webp(quality_factor)?,
         )),
     }
+}
+
+#[tracing::instrument]
+async fn proxy_handler_with_param(
+    extract::Path(_image_param): extract::Path<String>,
+    state: extract::State<Arc<(Client, f32)>>,
+    query: extract::Query<ProxyQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    proxy_handler(state, query).await
 }
 
 #[tokio::main]
@@ -78,8 +86,8 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", routing::get(|| async { "Hello world" }))
         .route("/", routing::get(proxy_handler))
-        .route("/:image_param", routing::get(proxy_handler))
-        .route("/proxy/:image_param", routing::get(proxy_handler))
+        .route("/:image_param", routing::get(proxy_handler_with_param))
+        .route("/proxy/:image_param", routing::get(proxy_handler_with_param))
         .with_state(shared_state)
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(cors_layer);
