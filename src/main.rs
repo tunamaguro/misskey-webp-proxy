@@ -53,27 +53,25 @@ async fn main() -> anyhow::Result<()> {
         args.quality_factor as f32,
     ));
 
-    // let allow_origin: Vec<_> = args
-    //     .allow_origin
-    //     .iter()
-    //     .map(|s| s.parse::<http::HeaderValue>().unwrap())
-    //     .collect();
-    // let mut cors_layer = tower_http::cors::CorsLayer::new().allow_methods([http::Method::GET]);
-    // println!("{:?}", allow_origin);
-    // if allow_origin.is_empty() {
-    //     cors_layer = cors_layer.allow_origin(tower_http::cors::Any)
-    // } else {
-    //     cors_layer = cors_layer.allow_origin([
-    //         "http://example.com".parse().unwrap(),
-    //         "http://api.example.com".parse().unwrap(),
-    //     ])
-    // }
+    let allow_origin: Vec<_> = args
+        .allow_origin
+        .iter()
+        .map(|s| s.parse::<http::HeaderValue>().unwrap())
+        .collect();
+    let mut cors_layer = tower_http::cors::CorsLayer::new().allow_methods([http::Method::GET]);
+    println!("{:?}", allow_origin);
+    if allow_origin.is_empty() {
+        cors_layer = cors_layer.allow_origin(tower_http::cors::Any)
+    } else {
+        cors_layer = cors_layer.allow_origin(allow_origin)
+    }
 
     let app = Router::new()
         .route("/", routing::get(|| async { "Hello world" }))
         .route("/proxy/:image_param", routing::get(proxy_handler))
         .with_state(shared_state)
-        .layer(tower_http::trace::TraceLayer::new_for_http());
+        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(cors_layer);
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.host, args.port))
         .await
         .unwrap();
