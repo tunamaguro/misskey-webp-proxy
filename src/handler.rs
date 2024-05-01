@@ -1,5 +1,5 @@
-use crate::client::download_image;
-use anyhow::Result;
+use crate::{client::download_image, processor::DecodeResult};
+use anyhow::{Ok, Result};
 use reqwest::{Client, Url};
 use serde::Deserialize;
 
@@ -60,9 +60,8 @@ impl TryFrom<ProxyQuery> for ProxyConfig {
 
 pub(crate) async fn media_proxy(
     client: &Client,
-    proxy_config: &ProxyConfig,
-    quality_factor: f32,
-) -> Result<Vec<u8>> {
+    proxy_config: &ProxyConfig
+) -> Result<DecodeResult> {
     let mut decoded_buf = download_image(client, &proxy_config.url).await?;
     match proxy_config.is_static {
         true => decoded_buf = decoded_buf.static_()?,
@@ -81,5 +80,5 @@ pub(crate) async fn media_proxy(
         }
     }
 
-    decoded_buf.to_webp(quality_factor)
+    Ok(decoded_buf)
 }

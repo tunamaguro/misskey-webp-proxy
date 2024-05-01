@@ -29,12 +29,15 @@ async fn proxy_handler(
     let client = &state.0;
     let quality_factor = state.1;
 
-    let buf = media_proxy(client, &config, quality_factor).await?;
+    let buf = media_proxy(client, &config).await?;
 
     // TODO:`Content-Security-Policy`および`Content-Disposition`に対応する
     Ok((
-        [(header::CACHE_CONTROL, "max-age=31536000, immutable")],
-        buf,
+        [
+            (header::CACHE_CONTROL, "max-age=31536000, immutable"),
+            (header::CONTENT_TYPE, "image/webp"),
+        ],
+        buf.to_webp(quality_factor)?,
     ))
 }
 

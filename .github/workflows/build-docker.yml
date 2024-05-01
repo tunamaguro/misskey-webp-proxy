@@ -19,7 +19,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-            images: tunamaguro/misskey-media-proxy-rust
+            images: tunamaguro/misskey-webp-proxy
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
