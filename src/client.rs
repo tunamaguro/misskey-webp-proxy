@@ -1,8 +1,8 @@
 use std::{io::Cursor, net::IpAddr, str::FromStr};
 
 use crate::processor::DecodeResult;
-use anyhow::{Context, Result};
-use image::{AnimationDecoder, DynamicImage, Frame, Frames};
+use anyhow::Result;
+use image::{AnimationDecoder, DynamicImage};
 use reqwest::{Client, Url};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -109,17 +109,7 @@ fn is_private_like(url: &Url) -> bool {
     true
 }
 
-fn separate_frame<'a>(
-    mut frames: Frames<'a>,
-) -> Result<(Frame, Box<dyn Iterator<Item = Frame> + 'a>)> {
-    let first_frame = frames.next().context("Cannot find first frame")??;
-
-    let other_frames = frames.filter_map(|x| x.ok());
-
-    Ok((first_frame, Box::new(other_frames)))
-}
-
-pub(crate) async fn download_image<'a>(client: &Client, url: &Url) -> Result<DecodeResult<'a>> {
+pub(crate) async fn download_image(client: &Client, url: &Url) -> Result<DecodeResult> {
     if is_private_like(url) {
         return Err(anyhow::anyhow!("Cannot accept ipaddr"));
     }
@@ -148,7 +138,7 @@ pub(crate) async fn download_image<'a>(client: &Client, url: &Url) -> Result<Dec
             let stream = Cursor::new(buf);
             let decoder = image::codecs::gif::GifDecoder::new(stream)?;
             let frames = decoder.into_frames();
-            Ok(DecodeResult::Movie(separate_frame(frames)?))
+            Ok(DecodeResult::Movie(frames.collect_frames()?))
         }
         ImageExt::Svg => {
             let txt = String::from_utf8_lossy(&buf).to_string();
@@ -159,7 +149,7 @@ pub(crate) async fn download_image<'a>(client: &Client, url: &Url) -> Result<Dec
             let decoder = image::codecs::webp::WebPDecoder::new(stream)?;
 
             match decoder.has_animation() {
-                true => Ok(DecodeResult::Movie(separate_frame(decoder.into_frames())?)),
+                true => Ok(DecodeResult::Movie(decoder.into_frames().collect_frames()?)),
                 false => {
                     let img = DynamicImage::from_decoder(decoder)?;
                     Ok(DecodeResult::Image(img.to_rgba8()))

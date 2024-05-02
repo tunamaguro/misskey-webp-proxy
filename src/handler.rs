@@ -58,10 +58,10 @@ impl TryFrom<ProxyQuery> for ProxyConfig {
     }
 }
 
-pub(crate) async fn media_proxy<'a>(
+pub(crate) async fn media_proxy(
     client: &Client,
     proxy_config: &ProxyConfig,
-) -> Result<DecodeResult<'a>> {
+) -> Result<DecodeResult> {
     let mut decoded_buf = download_image(client, &proxy_config.url).await?;
     match proxy_config.is_static {
         true => decoded_buf = decoded_buf.static_()?,

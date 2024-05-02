@@ -1,33 +1,33 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Ok, Result};
 use image::{imageops, Frame, RgbaImage};
 
 use crate::webp::{encode_webp_anim, encode_webp_image};
 
-pub(crate) enum DecodeResult<'a> {
+pub(crate) enum DecodeResult {
     Image(RgbaImage),
-    Movie((Frame, Box<dyn Iterator<Item = Frame> + 'a>)),
+    Movie(Vec<Frame>),
     TextFmt(String),
 }
 
 /// 画像の変換処理を実装する
 /// 仕様書: https://github.com/misskey-dev/media-proxy/blob/master/SPECIFICATION.md
-impl<'a> DecodeResult<'a> {
+impl DecodeResult {
     /// emojiを指定された際の大きさに変換する
-    pub(crate) fn emoji(self) -> Result<DecodeResult<'a>> {
+    pub(crate) fn emoji(self) -> Result<DecodeResult> {
         const EMOJI_HEIGHT: u32 = 128;
 
         self.resize_by_height(EMOJI_HEIGHT)
     }
 
     /// avaterを指定された際の大きさに変換する
-    pub(crate) fn avatar(self) -> Result<DecodeResult<'a>> {
+    pub(crate) fn avatar(self) -> Result<DecodeResult> {
         const AVATER_HEIGHT: u32 = 320;
 
         self.resize_by_height(AVATER_HEIGHT)
     }
 
     /// previewを指定された際の大きさに変換する
-    pub(crate) fn preview(self) -> Result<DecodeResult<'a>> {
+    pub(crate) fn preview(self) -> Result<DecodeResult> {
         const PREVIEW_HEIGHT: u32 = 200;
         const PREVIEW_WIDTH: u32 = 200;
 
@@ -35,7 +35,7 @@ impl<'a> DecodeResult<'a> {
     }
 
     /// badgeに対応した際の大きさに変換する
-    pub(crate) fn badge(self) -> Result<DecodeResult<'a>> {
+    pub(crate) fn badge(self) -> Result<DecodeResult> {
         const BADGE_HEIGHT: u32 = 96;
         const BADGE_WIDTH: u32 = 96;
 
@@ -43,7 +43,7 @@ impl<'a> DecodeResult<'a> {
     }
 
     /// アニメーション画像であれば最初のフレームのみにする。ついでに大きさも変換する
-    pub(crate) fn static_(self) -> Result<DecodeResult<'a>> {
+    pub(crate) fn static_(self) -> Result<DecodeResult> {
         const STATIC_HEIGHT: u32 = 422;
 
         self.first()?.resize_by_height(STATIC_HEIGHT)
@@ -72,23 +72,23 @@ impl<'a> DecodeResult<'a> {
     }
 
     /// 大きさを変換する
-    fn resize(self, h: u32, w: u32) -> Result<DecodeResult<'a>> {
+    fn resize(self, h: u32, w: u32) -> Result<DecodeResult> {
         match self {
             DecodeResult::Image(img) => {
                 let resized = imageops::resize(&img, w, h, imageops::FilterType::Triangle);
                 Ok(DecodeResult::Image(resized))
             }
-            DecodeResult::Movie((first, frames)) => {
-                fn resize_fn<'a>(f: &'a Frame, h: u32, w: u32) -> Frame {
+            DecodeResult::Movie(frames) => {
+                let mut tmp = Vec::new();
+
+                for f in frames {
                     let resized =
                         imageops::resize(f.buffer(), w, h, imageops::FilterType::Triangle);
                     let new_frame = Frame::from_parts(resized, 0, 0, f.delay());
-                    new_frame
+                    tmp.push(new_frame);
                 }
-                let first = resize_fn(&first, h.clone(), w.clone());
-                let other_frames = frames.map(|x| resize_fn(&x, h, w));
 
-                Ok(DecodeResult::Movie((first, Box::new(other_frames))))
+                Ok(DecodeResult::Movie(tmp))
             }
             DecodeResult::TextFmt(_) => self.render_svg()?.resize(h, w),
         }
@@ -108,7 +108,7 @@ impl<'a> DecodeResult<'a> {
     }
 
     /// svgを画像に変換する
-    fn render_svg(self) -> Result<DecodeResult<'a>> {
+    fn render_svg(self) -> Result<DecodeResult> {
         let res = match self {
             DecodeResult::Image(_) => self,
             DecodeResult::Movie(_) => self,
@@ -136,11 +136,18 @@ impl<'a> DecodeResult<'a> {
     }
 
     /// 一枚の画像に変換する。もとから単一の画像であれば何もしない
-    fn first(self) -> Result<DecodeResult<'a>> {
+    fn first(self) -> Result<DecodeResult> {
         match self {
             DecodeResult::Image(_) => Ok(self),
             DecodeResult::TextFmt(_) => Ok(self),
-            DecodeResult::Movie(frames) => Ok(DecodeResult::Image(frames.0.into_buffer())),
+            DecodeResult::Movie(frames) => {
+                let first = frames
+                    .into_iter()
+                    .next()
+                    .context("cannot find first frame")?;
+
+                Ok(DecodeResult::Image(first.into_buffer()))
+            }
         }
     }
 
@@ -148,7 +155,10 @@ impl<'a> DecodeResult<'a> {
     fn height(&self) -> Result<u32> {
         match self {
             DecodeResult::Image(img) => Ok(img.height()),
-            DecodeResult::Movie((first, _)) => Ok(first.buffer().height()),
+            DecodeResult::Movie(frames) => {
+                let first = frames.first().context("cannot find first frame")?;
+                Ok(first.buffer().height())
+            }
             DecodeResult::TextFmt(txt) => {
                 Ok(Self::create_svg_tree(txt)?.size().to_int_size().height())
             }
@@ -159,7 +169,10 @@ impl<'a> DecodeResult<'a> {
     fn width(&self) -> Result<u32> {
         match self {
             DecodeResult::Image(img) => Ok(img.width()),
-            DecodeResult::Movie((first, _)) => Ok(first.buffer().width()),
+            DecodeResult::Movie(frames) => {
+                let first = frames.first().context("cannot find first frame")?;
+                Ok(first.buffer().width())
+            }
             DecodeResult::TextFmt(txt) => {
                 Ok(Self::create_svg_tree(txt)?.size().to_int_size().width())
             }
@@ -167,7 +180,7 @@ impl<'a> DecodeResult<'a> {
     }
 
     fn create_svg_tree(txt: &String) -> Result<usvg::Tree> {
-        let opt = usvg::Options::default();
+        let mut opt = usvg::Options::default();
         // opt.default_size = usvg::Size::from_wh(w as f32, h as f32).context("")?;
         let mut fontdb = usvg::fontdb::Database::new();
         fontdb.load_system_fonts();
@@ -181,7 +194,7 @@ impl<'a> DecodeResult<'a> {
 mod tests {
     use std::io::Cursor;
 
-    use crate::client::*;
+    use crate::{client::*, processor::DecodeResult};
 
     use anyhow::Ok;
     use reqwest::Url;

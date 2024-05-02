@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Ok, Result};
 use image::{Frame, RgbaImage};
 use libwebp_sys::{
     WebPAnimEncoder, WebPAnimEncoderAdd, WebPAnimEncoderAssemble, WebPAnimEncoderDelete,
@@ -141,16 +141,16 @@ impl Drop for ManagedWebpMux {
     }
 }
 
-struct ManagedWebpAnim<'a> {
+struct ManagedWebpAnim {
     anim_option: WebPAnimEncoderOptions,
     anim_encoder: *mut WebPAnimEncoder,
     webp_muxabi_ver: i32,
-    frames: Box<dyn Iterator<Item = Frame> + 'a>,
+    frames: Vec<Frame>,
 }
 
-impl<'a> ManagedWebpAnim<'a> {
-    fn new(movie: (Frame, Box<dyn Iterator<Item = Frame> + 'a>)) -> Result<Self> {
-        let (first_frame, other_frames) = movie;
+impl ManagedWebpAnim {
+    fn new(frames: Vec<Frame>) -> Result<Self> {
+        let first_frame = frames.first().context("cannot get first frame")?;
         let mux_abi_version = WebPGetMuxABIVersion();
         let mut anim_option = std::mem::MaybeUninit::<WebPAnimEncoderOptions>::uninit();
         unsafe { WebPAnimEncoderOptionsInitInternal(anim_option.as_mut_ptr(), mux_abi_version) };
@@ -168,14 +168,14 @@ impl<'a> ManagedWebpAnim<'a> {
             anim_option,
             webp_muxabi_ver: mux_abi_version,
             anim_encoder: encoder,
-            frames: other_frames,
+            frames,
         });
     }
 
-    fn encode(self, quality_factor: f32) -> Result<Vec<u8>> {
+    fn encode(mut self, quality_factor: f32) -> Result<Vec<u8>> {
         let mut time_stamp_ms = 0;
-        for f in self.frames {
-            Self::add_frame(quality_factor, f, &mut time_stamp_ms, self.anim_encoder);
+        for f in self.frames.iter() {
+            self.anim_encoder_add(f, &mut time_stamp_ms, quality_factor)?;
         }
 
         let mut webp_data = std::mem::MaybeUninit::<WebPData>::uninit();
@@ -205,27 +205,20 @@ impl<'a> ManagedWebpAnim<'a> {
         Ok(buf)
     }
 
-    fn check_mux_error(e: WebPMuxError) -> Result<()> {
-        match e {
-            WebPMuxError::WEBP_MUX_OK => Ok(()),
-            _ => Err(anyhow::anyhow!("mux err")),
-        }
-    }
-
-    fn add_frame(
+    fn anim_encoder_add(
+        &self,
+        frame: &Frame,
+        time_stamp: &mut u32,
         quality_factor: f32,
-        f: Frame,
-        time_stamp_ms: &mut u32,
-        anim_encoder: *mut WebPAnimEncoder,
     ) -> Result<()> {
-        let duration = f.delay().numer_denom_ms();
-        *time_stamp_ms += duration.0 / duration.1;
-        let mut pic = ManagedWebpPicture::from_rgba(f.buffer(), quality_factor)?;
+        let duration = frame.delay().numer_denom_ms();
+        *time_stamp += duration.0 / duration.1;
+        let mut pic = ManagedWebpPicture::from_rgba(frame.buffer(), quality_factor)?;
         let status = unsafe {
             WebPAnimEncoderAdd(
-                anim_encoder,
+                self.anim_encoder,
                 &mut pic.picture,
-                *time_stamp_ms as i32,
+                *time_stamp as i32,
                 &pic.config,
             )
         };
@@ -235,11 +228,19 @@ impl<'a> ManagedWebpAnim<'a> {
                 status
             )));
         }
+
         Ok(())
+    }
+
+    fn check_mux_error(e: WebPMuxError) -> Result<()> {
+        match e {
+            WebPMuxError::WEBP_MUX_OK => Ok(()),
+            _ => Err(anyhow::anyhow!("mux err")),
+        }
     }
 }
 
-impl<'a> Drop for ManagedWebpAnim<'a> {
+impl Drop for ManagedWebpAnim {
     fn drop(&mut self) {
         unsafe {
             WebPAnimEncoderDelete(self.anim_encoder);
@@ -248,10 +249,7 @@ impl<'a> Drop for ManagedWebpAnim<'a> {
 }
 
 /// アニメーションをWebpにエンコードする
-pub(crate) fn encode_webp_anim<'a>(
-    movie: (Frame, Box<dyn Iterator<Item = Frame> + 'a>),
-    quality_factor: f32,
-) -> Result<Vec<u8>> {
-    let encoder = ManagedWebpAnim::new(movie)?;
+pub(crate) fn encode_webp_anim(frames: Vec<Frame>, quality_factor: f32) -> Result<Vec<u8>> {
+    let encoder = ManagedWebpAnim::new(frames)?;
     encoder.encode(quality_factor)
 }
