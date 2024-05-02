@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use anyhow::{Context, Ok, Result};
 use image::{Frame, RgbaImage};
 use libwebp_sys::{
@@ -7,6 +9,7 @@ use libwebp_sys::{
     WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPMux, WebPMuxAnimParams,
     WebPMuxAssemble, WebPMuxCreateInternal, WebPMuxDelete, WebPMuxError, WebPMuxSetAnimationParams,
     WebPPicture, WebPPictureFree, WebPPictureImportRGBA, WebPPreset, WebPValidateConfig,
+    WEBP_CSP_MODE,
 };
 
 struct ManagedWebpMemoryWriter {
@@ -252,4 +255,67 @@ impl Drop for ManagedWebpAnim {
 pub(crate) fn encode_webp_anim(frames: Vec<Frame>, quality_factor: f32) -> Result<Vec<u8>> {
     let encoder = ManagedWebpAnim::new(frames)?;
     encoder.encode(quality_factor)
+}
+
+use libwebp_sys::{
+    WebPAnimDecoder, WebPAnimDecoderDelete, WebPAnimDecoderGetInfo, WebPAnimDecoderNew,
+    WebPAnimDecoderOptions, WebPAnimDecoderOptionsInit, WebPAnimInfo,
+};
+
+struct ManagedWebpAnimDecoder<'a> {
+    options: WebPAnimDecoderOptions,
+    decoder: *mut WebPAnimDecoder,
+    webp_data: WebPData,
+    _ref: PhantomData<&'a [u8]>, // webp_dataが指している中身があることを保証する
+}
+
+impl<'a> ManagedWebpAnimDecoder<'a> {
+    pub(crate) fn new(src: &'a [u8]) -> Result<Self> {
+        let mut dec_options = std::mem::MaybeUninit::<WebPAnimDecoderOptions>::uninit();
+        let init_ok = unsafe { WebPAnimDecoderOptionsInit(dec_options.as_mut_ptr()) };
+        if init_ok != 1 {
+            return Err(anyhow::anyhow!("anim decoder option init failed"));
+        }
+
+        let mut dec_options = unsafe { dec_options.assume_init() };
+        dec_options.color_mode = WEBP_CSP_MODE::MODE_RGBA;
+
+        let webp_data = WebPData {
+            bytes: src.as_ptr(),
+            size: src.len(),
+        };
+
+        let decoder = unsafe { WebPAnimDecoderNew(&webp_data, &dec_options) };
+
+        if decoder.is_null() {
+            return Err(anyhow::anyhow!("anim decoder init failed"));
+        }
+
+        return Ok(Self {
+            decoder,
+            options: dec_options,
+            webp_data,
+            _ref: PhantomData,
+        });
+    }
+
+    pub(crate) fn count_frame(&self) -> Result<u32> {
+        let mut anim_info = std::mem::MaybeUninit::<WebPAnimInfo>::uninit();
+        let info_ok = unsafe { WebPAnimDecoderGetInfo(self.decoder, anim_info.as_mut_ptr()) };
+        if info_ok != 1 {
+            return Err(anyhow::anyhow!("getting anim info failed"));
+        }
+        let anim_info = unsafe { anim_info.assume_init() };
+        Ok(anim_info.frame_count)
+    }
+}
+
+impl<'a> Drop for ManagedWebpAnimDecoder<'a> {
+    fn drop(&mut self) {
+        unsafe { WebPAnimDecoderDelete(self.decoder) }
+    }
+}
+
+pub(crate) fn count_webp_anim_frame(src: &[u8]) -> Result<u32> {
+    ManagedWebpAnimDecoder::new(src)?.count_frame()
 }
