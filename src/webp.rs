@@ -111,9 +111,7 @@ struct ManagedWebpData {
 impl ManagedWebpData {
     fn new(ptr: std::mem::MaybeUninit<WebPData>) -> Self {
         let webp_data = unsafe { ptr.assume_init() };
-        Self {
-            webp_data,
-        }
+        Self { webp_data }
     }
 }
 
@@ -260,7 +258,7 @@ pub(crate) fn encode_webp_anim(frames: Vec<Frame>, quality_factor: f32) -> Resul
 use libwebp_sys::{
     WebPAnimDecoder, WebPAnimDecoderDelete, WebPAnimDecoderGetInfo, WebPAnimDecoderGetNext,
     WebPAnimDecoderHasMoreFrames, WebPAnimDecoderNew, WebPAnimDecoderOptions,
-    WebPAnimDecoderOptionsInit, WebPAnimInfo,
+    WebPAnimDecoderOptionsInit, WebPAnimDecoderReset, WebPAnimInfo,
 };
 
 struct ManagedWebpAnimDecoder<'a> {
@@ -272,13 +270,12 @@ struct ManagedWebpAnimDecoder<'a> {
 
 impl<'a> ManagedWebpAnimDecoder<'a> {
     pub(crate) fn new(src: &'a [u8]) -> Result<Self> {
-        let mut dec_options = std::mem::MaybeUninit::<WebPAnimDecoderOptions>::uninit();
-        let init_ok = unsafe { WebPAnimDecoderOptionsInit(dec_options.as_mut_ptr()) };
+        let mut dec_options: WebPAnimDecoderOptions = unsafe { std::mem::zeroed() };
+        let init_ok = unsafe { WebPAnimDecoderOptionsInit(&mut dec_options) };
         if init_ok != 1 {
             return Err(anyhow::anyhow!("anim decoder option init failed"));
         }
 
-        let mut dec_options = unsafe { dec_options.assume_init() };
         dec_options.color_mode = WEBP_CSP_MODE::MODE_RGBA;
 
         let webp_data = WebPData {
@@ -337,12 +334,11 @@ impl<'a> ManagedWebpAnimDecoder<'a> {
     }
 
     unsafe fn get_anim_info(&self) -> Result<WebPAnimInfo> {
-        let mut anim_info = std::mem::MaybeUninit::<WebPAnimInfo>::uninit();
-        let info_ok = WebPAnimDecoderGetInfo(self.decoder, anim_info.as_mut_ptr());
+        let mut anim_info: WebPAnimInfo = std::mem::zeroed();
+        let info_ok = WebPAnimDecoderGetInfo(self.decoder, &mut anim_info);
         if info_ok != 1 {
             return Err(anyhow::anyhow!("getting anim info failed"));
         }
-        let anim_info = anim_info.assume_init();
         Ok(anim_info)
     }
 
@@ -353,7 +349,10 @@ impl<'a> ManagedWebpAnimDecoder<'a> {
 
 impl<'a> Drop for ManagedWebpAnimDecoder<'a> {
     fn drop(&mut self) {
-        unsafe { WebPAnimDecoderDelete(self.decoder) }
+        unsafe {
+            WebPAnimDecoderReset(self.decoder);
+            WebPAnimDecoderDelete(self.decoder);
+        }
     }
 }
 
