@@ -113,7 +113,7 @@ impl DecodeResult {
             DecodeResult::Image(_) => self,
             DecodeResult::Movie(_) => self,
             DecodeResult::TextFmt(txt) => {
-                let mut opt = usvg::Options::default();
+                let opt = usvg::Options::default();
                 // opt.default_size = usvg::Size::from_wh(w as f32, h as f32).context("")?;
                 let mut fontdb = usvg::fontdb::Database::new();
                 fontdb.load_system_fonts();
@@ -179,13 +179,13 @@ impl DecodeResult {
         }
     }
 
-    fn create_svg_tree(txt: &String) -> Result<usvg::Tree> {
-        let mut opt = usvg::Options::default();
+    fn create_svg_tree(txt: &str) -> Result<usvg::Tree> {
+        let opt = usvg::Options::default();
         // opt.default_size = usvg::Size::from_wh(w as f32, h as f32).context("")?;
         let mut fontdb = usvg::fontdb::Database::new();
         fontdb.load_system_fonts();
 
-        let tree = usvg::Tree::from_str(&txt, &opt, &fontdb)?;
+        let tree = usvg::Tree::from_str(txt, &opt, &fontdb)?;
         Ok(tree)
     }
 }
@@ -194,7 +194,7 @@ impl DecodeResult {
 mod tests {
     use std::io::Cursor;
 
-    use crate::{client::*, processor::DecodeResult};
+    use crate::{client::*};
 
     use anyhow::Ok;
     use reqwest::Url;

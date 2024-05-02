@@ -1,6 +1,6 @@
 use std::{io::Cursor, net::IpAddr, str::FromStr};
 
-use crate::{processor::DecodeResult, webp::{count_webp_anim_frame, decode_webp_anim}};
+use crate::{processor::DecodeResult, webp::decode_webp_anim};
 use anyhow::Result;
 use image::{AnimationDecoder, DynamicImage};
 use reqwest::{Client, Url};

@@ -112,7 +112,7 @@ impl ManagedWebpData {
     fn new(ptr: std::mem::MaybeUninit<WebPData>) -> Self {
         let webp_data = unsafe { ptr.assume_init() };
         Self {
-            webp_data: webp_data,
+            webp_data,
         }
     }
 }
@@ -167,15 +167,15 @@ impl ManagedWebpAnim {
             )
         };
 
-        return Ok(Self {
+        Ok(Self {
             anim_option,
             webp_muxabi_ver: mux_abi_version,
             anim_encoder: encoder,
             frames,
-        });
+        })
     }
 
-    fn encode(mut self, quality_factor: f32) -> Result<Vec<u8>> {
+    fn encode(self, quality_factor: f32) -> Result<Vec<u8>> {
         let mut time_stamp_ms = 0;
         for f in self.frames.iter() {
             self.anim_encoder_add(f, &mut time_stamp_ms, quality_factor)?;
@@ -292,12 +292,12 @@ impl<'a> ManagedWebpAnimDecoder<'a> {
             return Err(anyhow::anyhow!("anim decoder init failed"));
         }
 
-        return Ok(Self {
+        Ok(Self {
             decoder,
             options: dec_options,
             webp_data,
             _ref: PhantomData,
-        });
+        })
     }
 
     pub(crate) fn decode(&self) -> Result<Vec<Frame>> {
@@ -363,6 +363,5 @@ pub(crate) fn decode_webp_anim(src: &[u8]) -> Result<Vec<Frame>> {
 }
 pub(crate) fn count_webp_anim_frame(src: &[u8]) -> Result<u32> {
     let decoder = ManagedWebpAnimDecoder::new(src)?;
-    decoder.decode();
     decoder.count_frame()
 }
