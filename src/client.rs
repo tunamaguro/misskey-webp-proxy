@@ -12,6 +12,7 @@ pub(crate) enum ImageExt {
     Gif,
     Svg,
     Webp,
+    Ico,
     Unknown,
 }
 
@@ -61,7 +62,7 @@ pub(crate) fn guess_format(buf: &[u8]) -> ImageExt {
                 return ImageExt::Unknown;
             }
             image::ImageFormat::Ico => {
-                return ImageExt::Unknown;
+                return ImageExt::Ico;
             }
             image::ImageFormat::Hdr => {
                 return ImageExt::Unknown;
@@ -154,6 +155,12 @@ pub(crate) async fn download_image(client: &Client, url: &Url) -> Result<DecodeR
                     Ok(DecodeResult::Image(img.to_rgba8()))
                 }
             }
+        }
+        ImageExt::Ico => {
+            let stream = Cursor::new(buf);
+            let decoder = image::codecs::ico::IcoDecoder::new(stream)?;
+            let img = DynamicImage::from_decoder(decoder)?;
+            Ok(DecodeResult::Image(img.to_rgba8()))
         }
         ImageExt::Unknown => Err(anyhow::anyhow!("Not supported")),
     }
