@@ -1,6 +1,6 @@
 use std::{io::Cursor, net::IpAddr, str::FromStr};
 
-use crate::processor::DecodeResult;
+use crate::{processor::DecodeResult, webp::decode_webp_anim};
 use anyhow::Result;
 use image::{AnimationDecoder, DynamicImage};
 use reqwest::{Client, Url};
@@ -145,11 +145,14 @@ pub(crate) async fn download_image(client: &Client, url: &Url) -> Result<DecodeR
             Ok(DecodeResult::TextFmt(txt))
         }
         ImageExt::Webp => {
-            let stream = Cursor::new(buf);
+            let stream = Cursor::new(&buf);
             let decoder = image::codecs::webp::WebPDecoder::new(stream)?;
 
             match decoder.has_animation() {
-                true => Ok(DecodeResult::Movie(decoder.into_frames().collect_frames()?)),
+                true => {
+                    let frames = decode_webp_anim(&buf);
+                    Ok(DecodeResult::Movie(frames?))
+                }
                 false => {
                     let img = DynamicImage::from_decoder(decoder)?;
                     Ok(DecodeResult::Image(img.to_rgba8()))

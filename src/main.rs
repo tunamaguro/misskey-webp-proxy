@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "debug".into()),
         )
-        .with(tracing_subscriber::fmt::layer().json())
+        .with(tracing_subscriber::fmt::layer())
         .init();
     tracing::info!(
         host = args.host,
